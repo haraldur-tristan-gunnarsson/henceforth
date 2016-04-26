@@ -151,7 +151,7 @@ NATIVE_CODE(rdrop){
 	(void)pop_proc();
 } NATIVE_ENTRY(rdrop,"RDROP",drop);
 
-NATIVE_CODE(dup){
+NATIVE_CODE(dup){// >r r@ r>
 	push_data(read_data());
 } NATIVE_ENTRY(dup,"DUP",rdrop);
 
@@ -160,7 +160,7 @@ NATIVE_CODE(swap){
 	size_t val1 = pop_data();
 	push_data(val2);
 	push_data(val1);
-} NATIVE_ENTRY(swap,"RDROP",dup);
+} NATIVE_ENTRY(swap,"SWAP",dup);
 
 NATIVE_CODE(s_to_r){
 	push_proc(pop_data());
@@ -462,7 +462,47 @@ start:
 //	}
 } NATIVE_ENTRY(start_threaded_code, "[", end_threaded_code);
 
-struct entry *head = &start_threaded_code_entry;
+THREADED_CODE(end_block_comment) = {
+	(size_t)&ret_entry,
+}; THREADED_ENTRY(end_block_comment, ")", start_threaded_code);
+
+NATIVE_CODE(start_block_comment){
+	int in;
+	int word_index = 0;
+start:
+	while((in = getchar()) != EOF){
+		if(in > ' '){
+			word[word_index] = (char)in;
+			word_index++;
+		}
+		else if(word_index){
+			word[word_index] = '\0';
+			word_index = 0;
+			push_data((size_t)word);
+			break;
+		}
+		if(word_index >= 0x100)error_exit("word length >256");
+	}
+	char *word = (char *)pop_data();
+	struct entry *current = head;
+	while(current){
+		if(!strcmp(word, current->name)){
+			if(&end_block_comment_entry == current)return;
+			break;
+		}
+		current = current->next;
+	}
+	goto start;	
+} NATIVE_ENTRY(start_block_comment, "(", end_block_comment);
+
+NATIVE_CODE(line_comment){
+	int in;
+	while((in = getchar()) != EOF){
+		if('\n' == in)return;
+	}
+} NATIVE_ENTRY(line_comment, "\\", start_block_comment);
+
+struct entry *head = &line_comment_entry;
 
 int main(void){
 	outer_interpreter_native();

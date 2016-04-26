@@ -3,3 +3,6 @@
 : CELL+ 	[ CELL + ] ;
 : 1+		[ 1 + ] ;
 : 1-		[ 1 - ] ;
+: OVER		[ >r DUP r> SWAP ] ;
+\ this should be a comment
+( as should this )
