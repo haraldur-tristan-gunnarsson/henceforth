@@ -377,6 +377,7 @@ NATIVE_CODE(outer_interpreter){
 NATIVE_CODE(colon){
 	int in;
 	int word_index = 0;
+	if(NULL == temp_code && (code_ptr != code_space))error_exit("first label of code block must be at block start");
 	while((in = getchar()) != EOF){
 		if(in > ' '){
 			word[word_index] = (char)in;
@@ -389,7 +390,7 @@ NATIVE_CODE(colon){
 			struct entry *new_word = malloc(sizeof(struct entry));
 			new_word->name = new_name;
 			new_word->code.threaded = code_ptr;
-			new_word->can_delete = 1;
+			new_word->can_delete = (code_ptr == code_space);
 			new_word->code_size = 0;
 			new_word->next = temp_code;
 			temp_code = new_word;
@@ -400,23 +401,17 @@ NATIVE_CODE(colon){
 } NATIVE_ENTRY(colon, ":", outer_interpreter);
 
 NATIVE_CODE(semicolon){
-	if((size_t)&ret_entry != *(code_ptr - 1))*code_ptr++ = (size_t)&ret_entry;
+	if((code_ptr == code_space) || ((size_t)&ret_entry != *(code_ptr - 1)))*code_ptr++ = (size_t)&ret_entry;
+	size_t global_code_size = (code_ptr - code_space) * (sizeof code_ptr);
+	size_t *new_code = malloc(global_code_size);
+	memcpy(new_code, code_space, global_code_size);
 	while(temp_code){
 		struct entry *temp = temp_code;
 		temp_code = temp_code->next;
 		temp->code_size = code_ptr - temp->code.threaded;
-		if(temp->code_size){
-			size_t *new_code = malloc(temp->code_size * sizeof code_space);
-			memcpy(new_code, temp->code.threaded, temp->code_size * sizeof code_ptr);
-			temp->code.threaded = new_code;
-			temp->next = head;
-			head = temp;
-		}
-		else{
-			free(temp->name);
-			free(temp);
-			puts("freeing");
-		}
+		temp->code.threaded = new_code + (temp->code.threaded - code_space);
+		temp->next = head;
+		head = temp;
 	}
 	code_ptr = code_space;
 } NATIVE_ENTRY(semicolon, ";", colon);
