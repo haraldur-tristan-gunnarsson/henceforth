@@ -416,35 +416,33 @@ NATIVE_CODE(semicolon){
 	code_ptr = code_space;
 } NATIVE_ENTRY(semicolon, ";", colon);
 
-THREADED_CODE(end_threaded_code) = {
-	(size_t)&ret_entry,
-}; THREADED_ENTRY(end_threaded_code, "]", semicolon);
-
 NATIVE_CODE(start_threaded_code){
 //	size_t *max = code_space + code_ptr;
+	static const int delimiter = ']';
 	int in;
 	int word_index = 0;
+	int got_delimiter = 0;
 start:
 	while((in = getchar()) != EOF){
 		if(in > ' '){
+			got_delimiter = 0;
+			if(delimiter == in && !word_index)got_delimiter = 1;
 			word[word_index] = (char)in;
 			word_index++;
 		}
 		else if(word_index){
+			if(got_delimiter)return;
 			word[word_index] = '\0';
 			word_index = 0;
-			push_data((size_t)word);
 			break;
 		}
 		if(word_index >= 0x100)error_exit("word length >256");
 	}
 	if(in == EOF)error_exit("cannot compile, EOF");
-	char *word = (char *)pop_data();
 	struct entry *current = head;
 	while(current){
 		if(!strcmp(word, current->name)){
-			if(&end_threaded_code_entry != current)*code_ptr++ = (size_t)current;
-			else return;
+			*code_ptr++ = (size_t)current;
 			break;
 		}
 		current = current->next;
@@ -460,40 +458,25 @@ start:
 //		if(&end_threaded_code_entry != xt)*code_ptr++ = (size_t)xt;
 //		else return;
 //	}
-} NATIVE_ENTRY(start_threaded_code, "[", end_threaded_code);
-
-THREADED_CODE(end_block_comment) = {
-	(size_t)&ret_entry,
-}; THREADED_ENTRY(end_block_comment, ")", start_threaded_code);
+} NATIVE_ENTRY(start_threaded_code, "[", semicolon);
 
 NATIVE_CODE(start_block_comment){
+	static const int delimiter = ')';
 	int in;
 	int word_index = 0;
-start:
+	int got_delimiter = 0;
 	while((in = getchar()) != EOF){
 		if(in > ' '){
-			word[word_index] = (char)in;
+			got_delimiter = 0;
+			if(delimiter == in && !word_index)got_delimiter = 1;
 			word_index++;
 		}
 		else if(word_index){
-			word[word_index] = '\0';
+			if(got_delimiter)return;
 			word_index = 0;
-			push_data((size_t)word);
-			break;
 		}
-		if(word_index >= 0x100)error_exit("word length >256");
 	}
-	char *word = (char *)pop_data();
-	struct entry *current = head;
-	while(current){
-		if(!strcmp(word, current->name)){
-			if(&end_block_comment_entry == current)return;
-			break;
-		}
-		current = current->next;
-	}
-	goto start;	
-} NATIVE_ENTRY(start_block_comment, "(", end_block_comment);
+} NATIVE_ENTRY(start_block_comment, "(", start_threaded_code);
 
 NATIVE_CODE(line_comment){
 	int in;
@@ -502,7 +485,48 @@ NATIVE_CODE(line_comment){
 	}
 } NATIVE_ENTRY(line_comment, "\\", start_block_comment);
 
-struct entry *head = &line_comment_entry;
+NATIVE_CODE(interactive_if){
+	static const int delimiter = '}';
+	int in;
+	int word_index = 0;
+	int got_delimiter = 0;
+	if(read_data())goto execute;
+	while((in = getchar()) != EOF){
+		if(in > ' '){
+			got_delimiter = 0;
+			if(delimiter == in && !word_index)got_delimiter = 1;
+			word_index++;
+		}
+		else if(word_index){
+			if(got_delimiter)return;
+			word_index = 0;
+		}
+	}
+	return;
+execute:	
+	while((in = getchar()) != EOF){
+		if(in > ' '){
+			got_delimiter = 0;
+			if(delimiter == in && !word_index)got_delimiter = 1;
+			word[word_index] = (char)in;
+			word_index++;
+		}
+		else if(word_index){
+			if(got_delimiter)return;
+			word[word_index] = '\0';
+			word_index = 0;
+			push_data((size_t)word);
+			exec_native();
+		}
+		if(word_index >= 0x100)error_exit("word length >256");
+	}
+} NATIVE_ENTRY(interactive_if, "iif{", line_comment);
+
+NATIVE_CODE(bool_invert){
+	push_data(pop_data() ? 0 : ~0);
+} NATIVE_ENTRY(bool_invert, "bool_invert", interactive_if);
+
+struct entry *head = &bool_invert_entry;
 
 int main(void){
 	outer_interpreter_native();

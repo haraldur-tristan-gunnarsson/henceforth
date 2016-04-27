@@ -1,8 +1,12 @@
+\ this should be a comment
+( as should this )
 : CELLS 	[ CELL * ] ;
 : CELL-		[ CELL - ] ;
 : CELL+ 	[ CELL + ] ;
 : 1+		[ 1 + ] ;
 : 1-		[ 1 - ] ;
 : OVER		[ >r DUP r> SWAP ] ;
-\ this should be a comment
-( as should this )
+: TUCK		[ SWAP OVER ] ;
+: else{		[ bool_invert iif{ ] ;
+: iifd{		[ iif{ DROP ] ;
+: elsed{	[ else{ DROP ] ;
