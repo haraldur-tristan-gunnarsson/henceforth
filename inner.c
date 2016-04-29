@@ -198,13 +198,21 @@ NATIVE_CODE(set_value){
 
 NATIVE_CODE(dot){
 	printf("%d\n",pop_data());
-} NATIVE_ENTRY(dot,".",at);
+} NATIVE_ENTRY(dot,".",set_value);
+
+NATIVE_CODE(malloc){
+	push_data((size_t)malloc((size_t)pop_data()));
+} NATIVE_ENTRY(malloc,"MALLOC",dot);
+
+NATIVE_CODE(free){
+	free((void *)pop_data());
+} NATIVE_ENTRY(free,"FREE",malloc);
 
 NATIVE_CODE(mul){
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val1*val2);
-} NATIVE_ENTRY(mul,"*",dot);
+} NATIVE_ENTRY(mul,"*",free);
 
 NATIVE_CODE(div){
 	size_t val2 = pop_data();
@@ -281,34 +289,37 @@ NATIVE_CODE(exec){
 
 static char word[0x100];
 
-NATIVE_CODE(quote){
+NATIVE_CODE(bsw){//bsw: blank-separated word
 	int in;
 	int word_index = 0;
-	while((in = getchar()) != EOF){
-		if(in > ' '){
-			word[word_index] = (char)in;
-			word_index++;
-		}
-		else if(word_index){
-			word[word_index] = '\0';
-			word_index = 0;
-//			push_data((size_t)word);
-//			exec_native();
-//			char *word = (char *)pop_data();
-			struct entry *current = head;
-			while(current){
-				if(!strcmp(word, current->name)){
-					push_data((size_t)current);
-					return;
-				}
-				current = current->next;
-			}
-			puts("********word not found!");
+	static char word[0x100];
+	while((in = getchar()) > ' '){
+		word[word_index] = (char)in;
+		word_index++;
+		if(word_index >= 0x100)error_exit("word length >=256");
+	}
+	word[word_index] = '\0';
+	push_data((size_t)word);
+} NATIVE_ENTRY(bsw, "BSW", exec);
+
+NATIVE_CODE(nprint){
+	puts((char *)pop_data());
+} NATIVE_ENTRY(nprint, "n.", bsw);
+
+NATIVE_CODE(quote){
+	bsw_native();
+	char * word = (char *) pop_data();
+	struct entry *current = head;
+	while(current){
+		if(!strcmp(word, current->name)){
+			push_data((size_t)current);
 			return;
 		}
-		if(word_index >= 0x100)error_exit("word length >256");
+		current = current->next;
 	}
-} NATIVE_ENTRY(quote,"'",exec);
+	puts("********word not found!");
+	return;
+} NATIVE_ENTRY(quote,"'",nprint);
 
 NATIVE_CODE(see){
 	quote_native();
@@ -324,9 +335,9 @@ NATIVE_CODE(see){
 		for(; current && current != (struct entry*)(*code); current = current->next);
 		if(current){
 			printf("%s ", current->name);
-			if(&literal_entry == current){
-				printf("%d ",*(++code));
-			}
+//			if(&literal_entry == current){
+//				printf("%d ",*(++code));
+//			}
 		}
 		else printf("%d ",*code);
 	}
@@ -353,7 +364,13 @@ NATIVE_CODE(prompt){
 } NATIVE_ENTRY(prompt,"PROMPT",words);
 
 NATIVE_CODE(outer_interpreter){
-	prompt_native();//can pass the prompt function on the stack, calling using CALL, to allow a non-interactive session that has an empty prompt function passed in
+//	prompt_native();//can pass the prompt function on the stack, calling using CALL, to allow a non-interactive session that has an empty prompt function passed in
+//	while(1){
+//		bsw_native();
+//		exec_native();
+//		//some way to go back one character, test if it is \n and prompt? How to catch EOF?
+//	}
+//	return;
 	int in;
 	int word_index = 0;
 	while((in = getchar()) != EOF){
@@ -416,6 +433,10 @@ NATIVE_CODE(semicolon){
 	code_ptr = code_space;
 } NATIVE_ENTRY(semicolon, ";", colon);
 
+NATIVE_CODE(compile){
+	*code_ptr++ = pop_data();
+} NATIVE_ENTRY(compile, ",", semicolon);
+
 NATIVE_CODE(start_threaded_code){
 //	size_t *max = code_space + code_ptr;
 	static const int delimiter = ']';
@@ -458,10 +479,10 @@ start:
 //		if(&end_threaded_code_entry != xt)*code_ptr++ = (size_t)xt;
 //		else return;
 //	}
-} NATIVE_ENTRY(start_threaded_code, "[", semicolon);
+} NATIVE_ENTRY(start_threaded_code, "[", compile);
 
-NATIVE_CODE(start_block_comment){
-	static const int delimiter = ')';
+NATIVE_CODE(skip_bl){
+	const char delimiter = (char)pop_data();
 	int in;
 	int word_index = 0;
 	int got_delimiter = 0;
@@ -476,16 +497,26 @@ NATIVE_CODE(start_block_comment){
 			word_index = 0;
 		}
 	}
-} NATIVE_ENTRY(start_block_comment, "(", start_threaded_code);
+} NATIVE_ENTRY(skip_bl, "SKIPBL", start_threaded_code);
+
+NATIVE_CODE(char){
+	bsw_native();
+	push_data((size_t)(((char *)pop_data())[0]));
+} NATIVE_ENTRY(char, "char", skip_bl);
 
 NATIVE_CODE(line_comment){
 	int in;
 	while((in = getchar()) != EOF){
 		if('\n' == in)return;
 	}
-} NATIVE_ENTRY(line_comment, "\\", start_block_comment);
+} NATIVE_ENTRY(line_comment, "\\", char);
 
 NATIVE_CODE(interactive_if){
+//	static const char * end_word = "}";
+//	if(read_data())goto execute;
+//	while(bsw_native(), strcmp(end_word, (char *)pop_data())){
+//	}
+//	return;
 	static const int delimiter = '}';
 	int in;
 	int word_index = 0;

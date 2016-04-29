@@ -1,12 +1,19 @@
 \ this should be a comment
+: ~					' ' , ' , , ;
+: [LITERAL]				[ LITERAL LITERAL , , ] ;
+: [char]				[ char [LITERAL] ] ;
+: (					[char] ) ~ SKIPBL ;
 ( as should this )
-: CELLS 	[ CELL * ] ;
-: CELL-		[ CELL - ] ;
-: CELL+ 	[ CELL + ] ;
-: 1+		[ 1 + ] ;
-: 1-		[ 1 - ] ;
-: OVER		[ >r DUP r> SWAP ] ;
-: TUCK		[ SWAP OVER ] ;
-: else{		[ bool_invert iif{ ] ;
-: iifd{		[ iif{ DROP ] ;
-: elsed{	[ else{ DROP ] ;
+: value		( n - "name" - )	[ : [LITERAL] ; ] ;
+: var		( - "name" - )		[ CELL MALLOC value ] ;
+: >var		( n - "name" - )	[ CELL MALLOC >r r@ ! r> value ] ;
+: CELLS 	( n -- n )		[ CELL * ] ;
+: CELL-		( n -- n )		[ CELL - ] ;
+: CELL+ 	( n -- n )		[ CELL + ] ;
+: 1+		( n -- n )		[ 1 + ] ;
+: 1-		( n -- n )		[ 1 - ] ;
+: OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
+: TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
+: ielse{	( n -- NOTn )		[ bool_invert iif{ ] ;
+: iifd{		( n -- )		[ iif{ DROP ] ;
+: ielsed{	( n -- )		[ else{ DROP ] ;
