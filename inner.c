@@ -2,6 +2,7 @@
 #include <stdlib.h>//malloc etc.
 #include <stddef.h>//size_t etc.
 #include <string.h>//strcpy etc.
+#include <unistd.h>//sbrk
 
 //#define DEBUG
 
@@ -143,9 +144,15 @@ NATIVE_CODE(literal){
 	push_data(*inst_ptr++);
 } NATIVE_ENTRY(literal,"LITERAL",ret);
 
+NATIVE_CODE(sbrk){
+	size_t old_end = (size_t)sbrk(pop_data());
+	if(~old_end)push_data(old_end);//error if -1, i.e ~old_end is 0
+	else error_exit("SBRK error!");
+} NATIVE_ENTRY(sbrk,"SBRK",literal);
+
 NATIVE_CODE(drop){
 	(void)pop_data();
-} NATIVE_ENTRY(drop,"DROP",literal);
+} NATIVE_ENTRY(drop,"DROP",sbrk);
 
 NATIVE_CODE(rdrop){
 	(void)pop_proc();
