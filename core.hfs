@@ -5,13 +5,8 @@
 : (					[char] ) ~ SKIPBL ;
 ( as should this )
 : value		( n - "name" - )	[ : [LITERAL] ; ] ;
-: var		( - "name" - )		[ CELL MALLOC value ] ;
-: >var		( n - "name" - )	[ CELL MALLOC >r r@ ! r> value ] ;
-\ version without MALLOC could work: abuse the instruction pointer (IPTR)!
-\ OR: : >var [ :temp SWAP , ; GETPTRD value ] ; \ where :temp creates a dict entry with name "" and GETPTRD extracts the entry's "code" pointer and places it on the data stack and then FORGETs the last dict entry
-\ but what about memory leaking???
-\ maybe best to make var and >var native for now
-\ SBRK: push_data((size_t)sbrk(pop_data()));
+: var		( - "name" - )		[ HERE CELL ALLOT value ] ;
+: >var		( n - "name" - )	[ HERE SWAP , value ] ;
 : CELLS 	( n -- n )		[ CELL * ] ;
 : CELL-		( n -- n )		[ CELL - ] ;
 : CELL+ 	( n -- n )		[ CELL + ] ;

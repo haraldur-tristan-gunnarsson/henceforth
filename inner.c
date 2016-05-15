@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdlib.h>//malloc etc.
+#include <stdlib.h>//exit	XXX DO NOT USE malloc OR free !!!!!!
 #include <stddef.h>//size_t etc.
 #include <string.h>//strcpy etc.
 #include <unistd.h>//sbrk
@@ -51,10 +51,16 @@ struct entry null_entry ={
 	.next = NULL,
 };
 
+size_t *code_ptr = NULL;
+size_t *code_end = NULL;
+#define TEMP_ENTRY_MAX (0x20)
+struct entry temp_entry_store[TEMP_ENTRY_MAX];
+struct entry *temp_entry_ptr = temp_entry_store;
+struct entry *temp_entry_head = NULL;
+#define TEMP_ENTRY_NAME_LENGTH_MAX 0x100
+char temp_entry_name_store[TEMP_ENTRY_MAX * TEMP_ENTRY_NAME_LENGTH_MAX];
+char *temp_entry_name_ptr = temp_entry_name_store;
 #define STACK_SIZE (0x10000)
-size_t code_space[STACK_SIZE];
-size_t *code_ptr = code_space;
-struct entry *temp_code = NULL;
 size_t data_stack[STACK_SIZE];
 size_t *data_ptr = data_stack;
 size_t proc_stack[STACK_SIZE];
@@ -144,11 +150,17 @@ NATIVE_CODE(literal){
 	push_data(*inst_ptr++);
 } NATIVE_ENTRY(literal,"LITERAL",ret);
 
+NATIVE_CODE(brk){
+	if(brk((void *)pop_data()))error_exit("BRK error!");
+//	printf("%d\n", sbrk(0));
+} NATIVE_ENTRY(brk,"BRK",literal);
+
 NATIVE_CODE(sbrk){
 	size_t old_end = (size_t)sbrk(pop_data());
 	if(~old_end)push_data(old_end);//error if -1, i.e ~old_end is 0
 	else error_exit("SBRK error!");
-} NATIVE_ENTRY(sbrk,"SBRK",literal);
+//	printf("%d\n", sbrk(0));
+} NATIVE_ENTRY(sbrk,"SBRK",brk);
 
 NATIVE_CODE(drop){
 	(void)pop_data();
@@ -189,13 +201,13 @@ NATIVE_CODE(code_ptr){
 	push_data((size_t)(&code_ptr));
 } NATIVE_ENTRY(code_ptr,"CPTR",inst_ptr);
 
-NATIVE_CODE(code_space){
-	push_data((size_t)(code_space));
-} NATIVE_ENTRY(code_space,"CSPA",code_ptr);
+NATIVE_CODE(code_end){
+	push_data((size_t)(code_end));
+} NATIVE_ENTRY(code_end,"CEND",code_ptr);
 
 NATIVE_CODE(at){
 	push_data(*((size_t *)pop_data()));
-} NATIVE_ENTRY(at,"@",code_space);
+} NATIVE_ENTRY(at,"@",code_end);
 
 NATIVE_CODE(set_value){
 	size_t *ref = (size_t *)pop_data();
@@ -203,23 +215,20 @@ NATIVE_CODE(set_value){
 	*ref = val;
 } NATIVE_ENTRY(set_value,"!",at);
 
+NATIVE_CODE(here){
+	code_ptr_native();
+	at_native();
+} NATIVE_ENTRY(here,"HERE",set_value);
+
 NATIVE_CODE(dot){
 	printf("%d\n",pop_data());
-} NATIVE_ENTRY(dot,".",set_value);
-
-NATIVE_CODE(malloc){
-	push_data((size_t)malloc((size_t)pop_data()));
-} NATIVE_ENTRY(malloc,"MALLOC",dot);
-
-NATIVE_CODE(free){
-	free((void *)pop_data());
-} NATIVE_ENTRY(free,"FREE",malloc);
+} NATIVE_ENTRY(dot,".",here);
 
 NATIVE_CODE(mul){
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val1*val2);
-} NATIVE_ENTRY(mul,"*",free);
+} NATIVE_ENTRY(mul,"*",dot);
 
 NATIVE_CODE(div){
 	size_t val2 = pop_data();
@@ -279,7 +288,7 @@ void inner_interpreter(void){
 
 struct entry *head;//FORWARD DECLARATION
 
-NATIVE_CODE(exec){
+NATIVE_CODE(exec){//TODO use this to run threaded code from native code?
 	char *word = (char *)pop_data();
 	struct entry *current = head;
 	while(current){
@@ -337,6 +346,8 @@ NATIVE_CODE(see){
 	}
 	size_t *code = xt->code.threaded;
 	size_t *code_stop = code + xt->code_size;
+	if(xt->code_size < 0)code_stop = code_ptr;//for unfinished words
+	printf("%d\n",xt->code_size);
 	for(;code < code_stop; ++code){
 		struct entry *current = head;
 		for(; current && current != (struct entry*)(*code); current = current->next);
@@ -398,54 +409,30 @@ NATIVE_CODE(outer_interpreter){
 	}
 } NATIVE_ENTRY(outer_interpreter, "OUTER_INTERPRETER", prompt);
 
-NATIVE_CODE(colon){
-	int in;
-	int word_index = 0;
-	if(NULL == temp_code && (code_ptr != code_space))error_exit("first label of code block must be at block start");
-	while((in = getchar()) != EOF){
-		if(in > ' '){
-			word[word_index] = (char)in;
-			word_index++;
-		}
-		else if(word_index){
-			word[word_index] = '\0';
-			char *new_name = malloc(word_index+1);
-			strcpy(new_name, word);
-			struct entry *new_word = malloc(sizeof(struct entry));
-			new_word->name = new_name;
-			new_word->code.threaded = code_ptr;
-			new_word->can_delete = (code_ptr == code_space);
-			new_word->code_size = 0;
-			new_word->next = temp_code;
-			temp_code = new_word;
-			return;
-		}
-		if(word_index >= 0x100)error_exit("word length >256");
+NATIVE_CODE(allot){
+	here_native();
+	add_native();
+	code_ptr_native();
+	set_value_native();
+	if(code_ptr >= code_end){//CPTR CEND < ifd{ RET }if
+		push_data(STACK_SIZE * sizeof(size_t));
+		here_native();
+		add_native();
+		dup_native();
+		brk_native();
+		code_end_native();
+		set_value_native();
 	}
-} NATIVE_ENTRY(colon, ":", outer_interpreter);
+} NATIVE_ENTRY(allot,"ALLOT",outer_interpreter);
 
-NATIVE_CODE(semicolon){
-	if((code_ptr == code_space) || ((size_t)&ret_entry != *(code_ptr - 1)))*code_ptr++ = (size_t)&ret_entry;
-	size_t global_code_size = (code_ptr - code_space) * (sizeof code_ptr);
-	size_t *new_code = malloc(global_code_size);
-	memcpy(new_code, code_space, global_code_size);
-	while(temp_code){
-		struct entry *temp = temp_code;
-		temp_code = temp_code->next;
-		temp->code_size = code_ptr - temp->code.threaded;
-		temp->code.threaded = new_code + (temp->code.threaded - code_space);
-		temp->next = head;
-		head = temp;
-	}
-	code_ptr = code_space;
-} NATIVE_ENTRY(semicolon, ";", colon);
-
-NATIVE_CODE(compile){
-	*code_ptr++ = pop_data();
-} NATIVE_ENTRY(compile, ",", semicolon);
+NATIVE_CODE(compile){// ( x -- )
+	here_native();//store code_ptr value
+	push_data(sizeof(code_ptr));//cell_native();
+	allot_native();
+	set_value_native();
+} NATIVE_ENTRY(compile, ",", allot);
 
 NATIVE_CODE(start_threaded_code){
-//	size_t *max = code_space + code_ptr;
 	static const int delimiter = ']';
 	int in;
 	int word_index = 0;
@@ -470,23 +457,69 @@ start:
 	struct entry *current = head;
 	while(current){
 		if(!strcmp(word, current->name)){
-			*code_ptr++ = (size_t)current;
+			push_data((size_t)current);
+			compile_native();
 			break;
 		}
 		current = current->next;
 	}
 	if(NULL != current)goto start;
-	*code_ptr++ = (size_t)&literal_entry;
-	*code_ptr++ = (atoi(word));//XXX TODO temporary, errors give 0
-	goto start;	
-//	puts("********word not found!");
-//	while(1){
-//		quote_native();
-//		struct entry *xt = (struct entry *)pop_data();
-//		if(&end_threaded_code_entry != xt)*code_ptr++ = (size_t)xt;
-//		else return;
-//	}
+	push_data((size_t)&literal_entry);
+	compile_native();
+	push_data((size_t)atoi(word));//XXX TODO temporary, errors give 0
+	compile_native();
+	goto start;
 } NATIVE_ENTRY(start_threaded_code, "[", compile);
+
+NATIVE_CODE(colon){
+	if(temp_entry_ptr > temp_entry_store + TEMP_ENTRY_MAX)error_exit("too many unfinalized labels, limit TEMP_ENTRY_MAX!!!");
+	int in;
+	int word_index = 0;
+	while((in = getchar()) != EOF){
+		if(in > ' '){
+			word[word_index] = (char)in;
+			word_index++;
+		}
+		else if(word_index){
+			word[word_index] = '\0';
+			strcpy(temp_entry_name_ptr, word);
+			temp_entry_ptr->name = temp_entry_name_ptr;
+			temp_entry_ptr->code.threaded = code_ptr;
+			temp_entry_ptr->can_delete = -1;
+			temp_entry_ptr->code_size = -1;//mark unfinished
+			temp_entry_ptr->next = head;
+			head = temp_entry_ptr;
+			temp_entry_ptr++;
+			temp_entry_name_ptr += TEMP_ENTRY_NAME_LENGTH_MAX;
+			return;
+		}
+		if(word_index >= 0x100)error_exit("word length >256");
+	}
+} NATIVE_ENTRY(colon, ":", start_threaded_code);
+
+NATIVE_CODE(semicolon){
+	if(((size_t)&ret_entry != *(code_ptr - 1)) && ((size_t)&literal_entry != *code_ptr - 2)){//must end with a callable RET
+		push_data((size_t)&ret_entry);
+		compile_native();
+	}
+	size_t* after_code = code_ptr;
+	struct entry *internal_ptr = temp_entry_store;
+	for(; internal_ptr < temp_entry_ptr; ++internal_ptr){
+		size_t *old_code_ptr = code_ptr;
+		push_data((size_t)strlen(internal_ptr->name) + 1);//0term
+		allot_native();
+		strcpy((char*)old_code_ptr,internal_ptr->name);
+		internal_ptr->name = (char*)old_code_ptr;
+		internal_ptr->code_size = after_code - internal_ptr->code.threaded;
+		if(internal_ptr > temp_entry_store)internal_ptr->next = head;
+		head = (struct entry*)code_ptr;//just after string
+		push_data(sizeof(struct entry));
+		allot_native();
+		memcpy(head, internal_ptr, sizeof(struct entry));
+	}
+	temp_entry_ptr = temp_entry_ptr;
+	temp_entry_name_ptr = temp_entry_name_store;
+} NATIVE_ENTRY(semicolon, ";", colon);
 
 NATIVE_CODE(skip_bl){
 	const char delimiter = (char)pop_data();
@@ -504,7 +537,7 @@ NATIVE_CODE(skip_bl){
 			word_index = 0;
 		}
 	}
-} NATIVE_ENTRY(skip_bl, "SKIPBL", start_threaded_code);
+} NATIVE_ENTRY(skip_bl, "SKIPBL", semicolon);
 
 NATIVE_CODE(char){
 	bsw_native();
@@ -567,6 +600,14 @@ NATIVE_CODE(bool_invert){
 struct entry *head = &bool_invert_entry;
 
 int main(void){
+	push_data(0);
+	sbrk_native();
+	code_ptr = code_end = (size_t*)pop_data();
+	push_data((size_t)(code_ptr + STACK_SIZE));
+	brk_native();
+	push_data(0);
+	sbrk_native();
+	code_end = (size_t*)pop_data();
 	outer_interpreter_native();
 	return 0;
 }
