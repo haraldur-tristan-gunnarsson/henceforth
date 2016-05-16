@@ -151,9 +151,31 @@ NATIVE_CODE(cin){
 	push_data((size_t)getc(global_in));
 } NATIVE_ENTRY(cin,"CIN",ret);
 
+NATIVE_CODE(inst_ptr){
+	push_data((size_t)(&inst_ptr));
+} NATIVE_ENTRY(inst_ptr,"IPTR",cin);
+
+NATIVE_CODE(code_ptr){
+	push_data((size_t)(&code_ptr));
+} NATIVE_ENTRY(code_ptr,"CPTR",inst_ptr);
+
+NATIVE_CODE(code_end){
+	push_data((size_t)(code_end));
+} NATIVE_ENTRY(code_end,"CEND",code_ptr);
+
+NATIVE_CODE(at){
+	push_data(*((size_t *)pop_data()));
+} NATIVE_ENTRY(at,"@",code_end);
+
+NATIVE_CODE(set_value){
+	size_t *ref = (size_t *)pop_data();
+	size_t val = pop_data();
+	*ref = val;
+} NATIVE_ENTRY(set_value,"!",at);
+
 NATIVE_CODE(literal){
 	push_data(*inst_ptr++);
-} NATIVE_ENTRY(literal,"LITERAL",cin);
+} NATIVE_ENTRY(literal,"LITERAL",set_value);
 
 NATIVE_CODE(brk){
 	if(brk((void *)pop_data()))error_exit("BRK error!");
@@ -175,16 +197,12 @@ NATIVE_CODE(rdrop){
 	(void)pop_proc();
 } NATIVE_ENTRY(rdrop,"RDROP",drop);
 
-NATIVE_CODE(dup){// >r r@ r>
-	push_data(read_data());
-} NATIVE_ENTRY(dup,"DUP",rdrop);
-
 NATIVE_CODE(swap){
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val2);
 	push_data(val1);
-} NATIVE_ENTRY(swap,"SWAP",dup);
+} NATIVE_ENTRY(swap,"SWAP",rdrop);
 
 NATIVE_CODE(s_to_r){
 	push_proc(pop_data());
@@ -194,36 +212,18 @@ NATIVE_CODE(r_to_s){
 	push_data(pop_proc());
 } NATIVE_ENTRY(r_to_s,"r>",s_to_r);
 
+NATIVE_CODE(s_to_r_copy){
+	push_proc(read_data());
+} NATIVE_ENTRY(s_to_r_copy,"@r",r_to_s);
+
 NATIVE_CODE(r_to_s_copy){
 	push_data(read_proc());
-} NATIVE_ENTRY(r_to_s_copy,"r@",r_to_s);
-
-NATIVE_CODE(inst_ptr){
-	push_data((size_t)(&inst_ptr));
-} NATIVE_ENTRY(inst_ptr,"IPTR",r_to_s_copy);
-
-NATIVE_CODE(code_ptr){
-	push_data((size_t)(&code_ptr));
-} NATIVE_ENTRY(code_ptr,"CPTR",inst_ptr);
-
-NATIVE_CODE(code_end){
-	push_data((size_t)(code_end));
-} NATIVE_ENTRY(code_end,"CEND",code_ptr);
-
-NATIVE_CODE(at){
-	push_data(*((size_t *)pop_data()));
-} NATIVE_ENTRY(at,"@",code_end);
-
-NATIVE_CODE(set_value){
-	size_t *ref = (size_t *)pop_data();
-	size_t val = pop_data();
-	*ref = val;
-} NATIVE_ENTRY(set_value,"!",at);
+} NATIVE_ENTRY(r_to_s_copy,"r@",s_to_r_copy);
 
 NATIVE_CODE(here){
 	code_ptr_native();
 	at_native();
-} NATIVE_ENTRY(here,"HERE",set_value);
+} NATIVE_ENTRY(here,"HERE",r_to_s_copy);
 
 NATIVE_CODE(dot){
 	printf("%d\n",pop_data());
@@ -253,11 +253,27 @@ NATIVE_CODE(add){
 	push_data(val1+val2);
 } NATIVE_ENTRY(add,"+",sub);
 
+NATIVE_CODE(bnot){
+	push_data(~pop_data());
+} NATIVE_ENTRY(bnot,"BNOT",add);
+
+NATIVE_CODE(bor){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1|val2);
+} NATIVE_ENTRY(bor,"BOR",bnot);
+
+NATIVE_CODE(band){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1&val2);
+} NATIVE_ENTRY(band,"BAND",bor);
+
 THREADED_CODE(cell) = {
 	(size_t)&literal_entry,
 	sizeof data_ptr,
 	(size_t)&ret_entry,
-}; THREADED_ENTRY(cell,"CELL",add);
+}; THREADED_ENTRY(cell,"CELL",band);
 
 NATIVE_CODE(call){
 	struct entry *xt = (struct entry *)pop_data();
@@ -340,7 +356,13 @@ NATIVE_CODE(quote){
 	}
 	puts("********word not found!");
 	return;
-} NATIVE_ENTRY(quote,"'",nprint);
+} NATIVE_ENTRY(quote, "'", nprint);
+
+NATIVE_CODE(xaddr){
+	struct entry *temp = (struct entry*)pop_data();
+	if(0 == temp->code_size)error_exit("XADDR invalid for natives");
+	push_data((size_t)temp->code.threaded);
+} NATIVE_ENTRY(xaddr, "XADDR", quote);
 
 NATIVE_CODE(see){
 	quote_native();
@@ -365,7 +387,7 @@ NATIVE_CODE(see){
 		else printf("%d ",*code);
 	}
 	puts("");
-} NATIVE_ENTRY(see,"see",quote);
+} NATIVE_ENTRY(see,"see",xaddr);
 
 NATIVE_CODE(words){
 	struct entry *current = head;
@@ -394,10 +416,11 @@ NATIVE_CODE(outer_interpreter){
 //		//some way to go back one character, test if it is \n and prompt? How to catch EOF?
 //	}
 //	return;
-	int in;
 	int word_index = 0;
-	while(cin_native(),(in = (int)pop_data()) != EOF){
-		if(in > ' '){
+	while(1){
+		cin_native();
+		int in = (int)pop_data();
+		if(in > ' '){//note that EOF (-1) is less than ' '
 			word[word_index] = (char)in;
 			word_index++;
 		}
@@ -411,6 +434,7 @@ NATIVE_CODE(outer_interpreter){
 			if('\n' == in && stdin == global_in)prompt_native();
 		}
 		if(word_index >= 0x100)error_exit("word length >256");
+		if(EOF == in)break;
 	}
 } NATIVE_ENTRY(outer_interpreter, "OUTER_INTERPRETER", prompt);
 
@@ -423,7 +447,7 @@ NATIVE_CODE(allot){
 		push_data(STACK_SIZE * sizeof(size_t));
 		here_native();
 		add_native();
-		dup_native();
+		s_to_r_copy_native(); r_to_s_native();//: DUP [ @r r> ] ;
 		brk_native();
 		code_end_native();
 		set_value_native();
@@ -600,11 +624,11 @@ execute:
 	}
 } NATIVE_ENTRY(interactive_if, "iif{", line_comment);
 
-NATIVE_CODE(bool_invert){
-	push_data(pop_data() ? 0 : ~0);
-} NATIVE_ENTRY(bool_invert, "bool_invert", interactive_if);
+NATIVE_CODE(not){
+	push_data(pop_data() ? 0 : ~0);// -1 or ~0 is TRUE, 0 is FALSE
+} NATIVE_ENTRY(not, "NOT", interactive_if);
 
-struct entry *head = &bool_invert_entry;
+struct entry *head = &not_entry;
 
 int main(void){
 	push_data(0);

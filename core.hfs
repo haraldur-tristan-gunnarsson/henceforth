@@ -1,19 +1,53 @@
 \ this should be a comment
 : ~					' ' , ' , , ;
-: [LITERAL]				[ LITERAL LITERAL , , ] ;
+: ~LIT					[ LITERAL LITERAL , ] ;
+: ~,					[ LITERAL , , ] ;
+: [LITERAL]				[ ~LIT , ] ;
+: '[LITERAL]				[ ' [LITERAL] ] ;
+: ~~ 					[ '[LITERAL] LITERAL , , ] ;
+: ~~					[ ' ~LIT , ~, ] ;
+: ~~~					[ ' ~LIT ~LIT ~, ~LIT , ~, ~LIT ~, ~, ] ;
+: ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ LITERAL ~ , ~ , ;
+: ,,					~ LITERAL ~ , ~ , ;
+: ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ ,, ;
+: ~~~					~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
 : [char]				[ char [LITERAL] ] ;
 : (					[char] ) ~ SKIPBL ;
 ( as should this )
-: value		( n - "name" - )	[ : [LITERAL] ; ] ;
-: var		( - "name" - )		[ HERE CELL ALLOT value ] ;
-: >var		( n - "name" - )	[ HERE SWAP , value ] ;
 : CELLS 	( n -- n )		[ CELL * ] ;
 : CELL-		( n -- n )		[ CELL - ] ;
 : CELL+ 	( n -- n )		[ CELL + ] ;
 : 1+		( n -- n )		[ 1 + ] ;
 : 1-		( n -- n )		[ 1 - ] ;
+: DUP		( n -- n n )		[ @r r> ] ;
+: RDUP		( r:n -- r:n r:n )	[ r@ >r ] ;
+: BOOL		( n -- bool )		[ NOT NOT ] ;
+
+: JMP					[ r> @ >r RET ] ; \ jump no link
+: JMPL		( similar to CALL )	[ r@ @ >r RET ] ; \ jump with link
+: (JMPNZ)	( n raddr -- addr )	[ >r NOT DUP NOT ] \ nbool bool
+					[ r@ @ BAND SWAP ] \ new? nbool
+					[ r> CELL+ BAND + ] ; \ addr
+: JMPNZ		( n -- )		[ r> (JMPNZ) >r RET ] ;
+: JMPNZL	( similar to CALL )	[ r@ (JMPNZ) >r RET ] ;
+: (JMPNZP)	( n raddr -- n addr )	[ SWAP @r SWAP (JMPNZ) r> SWAP ] ;
+: JMPNZP	( n -- n )		[ r> (JMPNZP) >r RET ] ; \ preserv
+: JMPNZPL	( similar to CALL )	[ r@ (JMPNZP) >r RET ] ; \ preserv
+
+: TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;
+: if{		( -- addr )		~~ NOT ~~ JMPNZP ~ TEMPALLOT ;
+: ifd{		( -- addr )		~~ NOT ~~ JMPNZ  ~ TEMPALLOT ;
+: }if		( addr -- )		[ HERE SWAP ! ] ;
+: }else{				~ }if ~~ NOT ~ if{ ;
+: }elsed{				~ }if ~~ NOT ~ ifd{ ;
+
+: value		( n - "name" - )	[ : [LITERAL] ; ] ;
+: var		( - "name" - )		[ HERE CELL ALLOT value ] ;
+: >var		( n - "name" - )	[ HERE SWAP , value ] ;
 : OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
 : TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
-: ielse{	( n -- NOTn )		[ bool_invert iif{ ] ;
+: ielse{	( n -- NOTn )		[ NOT iif{ ] ;
 : iifd{		( n -- )		[ iif{ DROP ] ;
 : ielsed{	( n -- )		[ else{ DROP ] ;
+
+: 'XADDR	( - "name" - )		[ ' XADDR ] ;
