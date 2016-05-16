@@ -5,6 +5,7 @@
 #include <unistd.h>//sbrk
 
 //#define DEBUG
+FILE *global_in = NULL;
 
 void error_exit(char *message){
 	puts(message);
@@ -146,9 +147,13 @@ NATIVE_CODE(ret){// r> IPTR !
 #endif
 } NATIVE_ENTRY(ret,"RET",show_proc);
 
+NATIVE_CODE(cin){
+	push_data((size_t)getc(global_in));
+} NATIVE_ENTRY(cin,"CIN",ret);
+
 NATIVE_CODE(literal){
 	push_data(*inst_ptr++);
-} NATIVE_ENTRY(literal,"LITERAL",ret);
+} NATIVE_ENTRY(literal,"LITERAL",cin);
 
 NATIVE_CODE(brk){
 	if(brk((void *)pop_data()))error_exit("BRK error!");
@@ -309,7 +314,7 @@ NATIVE_CODE(bsw){//bsw: blank-separated word
 	int in;
 	int word_index = 0;
 	static char word[0x100];
-	while((in = getchar()) > ' '){
+	while(cin_native(),(in = (int)pop_data()) > ' '){
 		word[word_index] = (char)in;
 		word_index++;
 		if(word_index >= 0x100)error_exit("word length >=256");
@@ -382,7 +387,7 @@ NATIVE_CODE(prompt){
 } NATIVE_ENTRY(prompt,"PROMPT",words);
 
 NATIVE_CODE(outer_interpreter){
-//	prompt_native();//can pass the prompt function on the stack, calling using CALL, to allow a non-interactive session that has an empty prompt function passed in
+	if(stdin == global_in)prompt_native();//can pass the prompt function on the stack, calling using CALL, to allow a non-interactive session that has an empty prompt function passed in
 //	while(1){
 //		bsw_native();
 //		exec_native();
@@ -391,7 +396,7 @@ NATIVE_CODE(outer_interpreter){
 //	return;
 	int in;
 	int word_index = 0;
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			word[word_index] = (char)in;
 			word_index++;
@@ -403,7 +408,7 @@ NATIVE_CODE(outer_interpreter){
 				push_data((size_t)word);
 				exec_native();
 			}
-			if('\n' == in)prompt_native();
+			if('\n' == in && stdin == global_in)prompt_native();
 		}
 		if(word_index >= 0x100)error_exit("word length >256");
 	}
@@ -438,7 +443,7 @@ NATIVE_CODE(start_threaded_code){
 	int word_index = 0;
 	int got_delimiter = 0;
 start:
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			got_delimiter = 0;
 			if(delimiter == in && !word_index)got_delimiter = 1;
@@ -475,7 +480,7 @@ NATIVE_CODE(colon){
 	if(temp_entry_ptr > temp_entry_store + TEMP_ENTRY_MAX)error_exit("too many unfinalized labels, limit TEMP_ENTRY_MAX!!!");
 	int in;
 	int word_index = 0;
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			word[word_index] = (char)in;
 			word_index++;
@@ -498,6 +503,7 @@ NATIVE_CODE(colon){
 } NATIVE_ENTRY(colon, ":", start_threaded_code);
 
 NATIVE_CODE(semicolon){
+//	puts("jjjjjjjjjjjjjjjjjjjjjjj");
 	if(((size_t)&ret_entry != *(code_ptr - 1)) && ((size_t)&literal_entry != *code_ptr - 2)){//must end with a callable RET
 		push_data((size_t)&ret_entry);
 		compile_native();
@@ -511,13 +517,14 @@ NATIVE_CODE(semicolon){
 		strcpy((char*)old_code_ptr,internal_ptr->name);
 		internal_ptr->name = (char*)old_code_ptr;
 		internal_ptr->code_size = after_code - internal_ptr->code.threaded;
+//		printf("%s %d %d %d\n", internal_ptr->name, internal_ptr->code.threaded, after_code, internal_ptr->code_size);
 		if(internal_ptr > temp_entry_store)internal_ptr->next = head;
 		head = (struct entry*)code_ptr;//just after string
 		push_data(sizeof(struct entry));
 		allot_native();
 		memcpy(head, internal_ptr, sizeof(struct entry));
 	}
-	temp_entry_ptr = temp_entry_ptr;
+	temp_entry_ptr = temp_entry_store;
 	temp_entry_name_ptr = temp_entry_name_store;
 } NATIVE_ENTRY(semicolon, ";", colon);
 
@@ -526,7 +533,7 @@ NATIVE_CODE(skip_bl){
 	int in;
 	int word_index = 0;
 	int got_delimiter = 0;
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			got_delimiter = 0;
 			if(delimiter == in && !word_index)got_delimiter = 1;
@@ -546,7 +553,7 @@ NATIVE_CODE(char){
 
 NATIVE_CODE(line_comment){
 	int in;
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if('\n' == in)return;
 	}
 } NATIVE_ENTRY(line_comment, "\\", char);
@@ -562,7 +569,7 @@ NATIVE_CODE(interactive_if){
 	int word_index = 0;
 	int got_delimiter = 0;
 	if(read_data())goto execute;
-	while((in = getchar()) != EOF){
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			got_delimiter = 0;
 			if(delimiter == in && !word_index)got_delimiter = 1;
@@ -574,8 +581,8 @@ NATIVE_CODE(interactive_if){
 		}
 	}
 	return;
-execute:	
-	while((in = getchar()) != EOF){
+execute:
+	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
 			got_delimiter = 0;
 			if(delimiter == in && !word_index)got_delimiter = 1;
@@ -608,6 +615,11 @@ int main(void){
 	push_data(0);
 	sbrk_native();
 	code_end = (size_t*)pop_data();
+	
+	global_in = fopen("core.hfs", "r");
+	outer_interpreter_native();
+	fclose(global_in);
+	global_in = stdin;
 	outer_interpreter_native();
 	return 0;
 }
