@@ -10,21 +10,45 @@
 : ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ LITERAL ~ , ~ , ;
 : ,,					~ LITERAL ~ , ~ , ;
 : ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ ,, ;
+: ~~					[ ~LIT ~ ,, ] ;
+: ~~					[ LITERAL LITERAL , ~ LITERAL , , ] ;
 : ~~~					~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
+: ~~					~ LITERAL ~ LITERAL ~ , ~ ~ ~ LITERAL ~ , ~ , ;
+: ~~~					~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ ~ ~~ , ~~ LITERAL ~~ , ~~ , ;
 : [char]				[ char [LITERAL] ] ;
 : (					[char] ) ~ SKIPBL ;
 ( as should this )
+
+: see		( -- )			[ ' seext ] ;
+
 : CELLS 	( n -- n )		[ CELL * ] ;
 : CELL-		( n -- n )		[ CELL - ] ;
 : CELL+ 	( n -- n )		[ CELL + ] ;
 : 1+		( n -- n )		[ 1 + ] ;
 : 1-		( n -- n )		[ 1 - ] ;
-: DUP		( n -- n n )		[ @r r> ] ;
+
+: (SKIPCELL) [ r> r> CELL+ >r >r ] ;
+: LIT [ r@ @ (SKIPCELL) ] ;
+: LIT, [ r@ @ , (SKIPCELL) ] ;
+: ~~ [ LIT, LIT, ~ ] ;
+: ~~~ [ LIT, LIT, LIT, LIT, LIT, LIT, ~ ] ;
+: ~~ ~ LIT, ~ LIT, ~ ~ ;
+: ~~~ ~~ LIT, ~~ LIT, ~~ LIT, ~ ~ ;
+: ~~~~ ~~~ LIT, ~~~ LIT, ~~~ LIT, ~~ LIT, ~ ~ ;
+
 : RDUP		( r:n -- r:n r:n )	[ r@ >r ] ;
+: DUP		( n -- n n )		[ @r r> ] ;
+: OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
+: TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
 : BOOL		( n -- bool )		[ NOT NOT ] ;
 
+: 'XADDR	( - "name" - addr )	[ ' XADDR ] ;
 : JMP					[ r> @ >r RET ] ; \ jump no link
-: JMPL		( similar to CALL )	[ r@ @ >r RET ] ; \ jump with link
+: JMPL		( similar to CALL )	[ r@ @ (SKIPCELL) >r RET ] ; \ jump with link
+: ~JMP,		( addr -- )		~~ JMP ~ , ;
+: GOTO		( - "name" - )		[ 'XADDR ~JMP, ] ;
+: ~JMPL,	( addr -- )		~~ JMPL ~ , ;
+: GOSUB		( addr -- )		[ 'XADDR ~JMPL, ] ;
 : (JMPNZ)	( n raddr -- addr )	[ >r NOT DUP NOT ] \ nbool bool
 					[ r@ @ BAND SWAP ] \ new? nbool
 					[ r> CELL+ BAND + ] ; \ addr
@@ -38,16 +62,39 @@
 : if{		( -- addr )		~~ NOT ~~ JMPNZP ~ TEMPALLOT ;
 : ifd{		( -- addr )		~~ NOT ~~ JMPNZ  ~ TEMPALLOT ;
 : }if		( addr -- )		[ HERE SWAP ! ] ;
-: }else{				~ }if ~~ NOT ~ if{ ;
-: }elsed{				~ }if ~~ NOT ~ ifd{ ;
+: }else{	( addr -- addr )	~ }if ~~ NOT ~ if{ ;
+: }elsed{	( addr -- addr )	~ }if ~~ NOT ~ ifd{ ;
+: infloop{	( -- addr )		~ HERE ;
+: }infloop	( addr -- )		~ ~JMP, ;
+: loop{		( -- addr )		~ HERE ;
+: }loop{	( -- addr )		~ if{ ;
+: }loopd{	( -- addr )		~ ifd{ ;
+: }loop		( addr addr -- )	[ SWAP ~JMP, }if ] ;
 
 : value		( n - "name" - )	[ : [LITERAL] ; ] ;
 : var		( - "name" - )		[ HERE CELL ALLOT value ] ;
 : >var		( n - "name" - )	[ HERE SWAP , value ] ;
-: OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
-: TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
 : ielse{	( n -- NOTn )		[ NOT iif{ ] ;
 : iifd{		( n -- )		[ iif{ DROP ] ;
-: ielsed{	( n -- )		[ else{ DROP ] ;
+: ielsed{	( n -- )		[ ielse{ DROP ] ;
 
-: 'XADDR	( - "name" - )		[ ' XADDR ] ;
+0 BNOT value CELL_MAX
+CELL_MAX DUP 2 / - value SIGNED_MIN
+: =		( n n -- bool )		[ - NOT ] ;
+: <>		( n n -- bool )		[ - BOOL ] ;
+
+: c,		( c -- )		[ HERE 1 ALLOT c! ] ;
+: ,"		( - "text" - )		loop{ [ CIN DUP ] [char] " ~ <>
+					}loopd{ ~ c, }loop ~ DROP ;
+: ,n"		( - "text" - )		[ ," 0 c, ] ;
+: ,nh"		( - "text" - addr )	[ HERE ,n" ] ;
+: ,h"		( - "text" - addr len )	[ HERE ," DUP HERE SWAP - ] ;
+
+: TRIM		( addr -- )		[ DUP CPTR ! CEND @ PAGESIZE - <= ]
+					ifd{ [ HERE M_SET_END ] }if
+					loop{ [ HEAD @ HERE >= ] }loopd{
+					[ HEAD @ @ HEAD ! ] }loop ;
+: FORGET	( - "name" - )		[ 'XADDR TRIM ] ;
+: deletion_mark	( - "name" - )		~ HERE ~ : ~ [LITERAL] ~~ TRIM ~ ; ;
+
+: ."		( - "text" - )		[ HERE ,nh" n. TRIM ] ;

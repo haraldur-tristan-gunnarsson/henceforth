@@ -1,0 +1,18 @@
+." >>>>>>>>>>>>>>>>>>>>>>>>Hello, world!<<<<<<<<<<<<<<<<<<<"
+
+." Note that HERE is:" HERE .
+
+deletion_mark hello_mark
+
+,nh" This text is stored semi-permanently, subject to a deletion_mark" n.
+." The deletion_mark is called hello_mark."
+
+." There is a procedure called test_proc."
+,nh" This text is used in test_proc." : test_proc [LITERAL] ~ n. ;
+." Calling test_proc..." test_proc
+." Here is the list of all procedures (words) via WORDS:" WORDS
+." HERE is currently:" HERE .
+
+." Now using deletion_mark hello_mark." hello_mark
+." Now HERE is:" HERE .
+." And there are fewer WORDS:" WORDS

@@ -1,8 +1,12 @@
+#define _GNU_SOURCE 0xF00BAA //value unimportant, required for mremap
 #include <stdio.h>
-#include <stdlib.h>//exit	XXX DO NOT USE malloc OR free !!!!!!
+#include <stdlib.h>//exit
 #include <stddef.h>//size_t etc.
 #include <string.h>//strcpy etc.
-#include <unistd.h>//sbrk
+#include <unistd.h>//sysconf
+#include <sys/mman.h>//mmap, mremap
+#include <limits.h>//__WORDSIZE
+#include <errno.h>
 
 //#define DEBUG
 FILE *global_in = NULL;
@@ -13,6 +17,7 @@ void error_exit(char *message){
 }
 
 struct entry{
+	struct entry *next;
 	char *name;
 	union{
 		size_t *threaded;
@@ -20,40 +25,42 @@ struct entry{
 	} code;
 	int can_delete;
 	int code_size;//if zero, then native. negative invalid
-	struct entry *next;
 };
 #define NATIVE_CODE(CNAME) void CNAME##_native(void)
 #define NATIVE_ENTRY(CNAME,NAME,NEXT) \
 struct entry CNAME##_entry ={ \
+	.next = &NEXT##_entry, \
 	.name = NAME, \
 	.code.native = &CNAME##_native, \
 	.code_size = 0, \
 	.can_delete = 0, \
-	.next = &NEXT##_entry, \
 };
 #define THREADED_CODE(CNAME) size_t CNAME##_threaded[]
 #define THREADED_ENTRY(CNAME,NAME,NEXT) \
 struct entry CNAME##_entry ={ \
+	.next = &NEXT##_entry, \
 	.name = NAME, \
 	.code.threaded = CNAME##_threaded, \
 	.code_size = (sizeof CNAME##_threaded)/(sizeof(size_t*)), \
 	.can_delete = 0, \
-	.next = &NEXT##_entry, \
 };
 
 void null_entry_code(void){
 	error_exit("******ERROR: executed null entry \"\" at end of dictionary");
 }
 struct entry null_entry ={
+	.next = NULL,
 	.name = "",
 	.code.native = &null_entry_code,
 	.code_size = 0,
 	.can_delete = 0,
-	.next = NULL,
 };
 
+size_t *code_spc = NULL;
 size_t *code_ptr = NULL;
 size_t *code_end = NULL;
+size_t page_size = 0;
+size_t data_store_size = 0;
 #define TEMP_ENTRY_MAX (0x20)
 struct entry temp_entry_store[TEMP_ENTRY_MAX];
 struct entry *temp_entry_ptr = temp_entry_store;
@@ -75,14 +82,14 @@ NATIVE_CODE(reset_stack){
 NATIVE_CODE(show_data){
 	size_t *ii;
 	printf("data: ");
-	for(ii = data_stack; ii < data_ptr; ++ii)printf("%d ", *ii);
+	for(ii = data_stack; ii < data_ptr; ++ii)printf("%zd ", *ii);
 	puts("");
 } NATIVE_ENTRY(show_data,".s",reset_stack);
 
 NATIVE_CODE(show_proc){
 	size_t *ii;
 	printf("proc: ");
-	for(ii = proc_stack; ii < proc_ptr; ++ii)printf("%d ", *ii);
+	for(ii = proc_stack; ii < proc_ptr; ++ii)printf("%zd ", *ii);
 	puts("");
 } NATIVE_ENTRY(show_proc,".r",show_data);
 
@@ -134,16 +141,16 @@ size_t pop_proc(void){
 }
 size_t read_proc(void){return *(proc_ptr - 1);}
 
-NATIVE_CODE(ret){// r> IPTR !
+NATIVE_CODE(ret){
 #ifdef DEBUG
 	show_data_native();
 	show_proc_native();
 	printf("%d %s\n", __LINE__, __FILE__);
-	printf("inst_ptr: %u\n", inst_ptr);
+	printf("inst_ptr: %p\n", inst_ptr);
 #endif
 	inst_ptr = (size_t*)pop_proc();
 #ifdef DEBUG
-	printf("inst_ptr: %u\n", inst_ptr);
+	printf("inst_ptr: %p\n", inst_ptr);
 #endif
 } NATIVE_ENTRY(ret,"RET",show_proc);
 
@@ -151,16 +158,16 @@ NATIVE_CODE(cin){
 	push_data((size_t)getc(global_in));
 } NATIVE_ENTRY(cin,"CIN",ret);
 
-NATIVE_CODE(inst_ptr){
-	push_data((size_t)(&inst_ptr));
-} NATIVE_ENTRY(inst_ptr,"IPTR",cin);
+NATIVE_CODE(pagesize){
+	push_data(page_size);
+} NATIVE_ENTRY(pagesize,"PAGESIZE",cin);
 
 NATIVE_CODE(code_ptr){
 	push_data((size_t)(&code_ptr));
-} NATIVE_ENTRY(code_ptr,"CPTR",inst_ptr);
+} NATIVE_ENTRY(code_ptr,"CPTR",pagesize);
 
 NATIVE_CODE(code_end){
-	push_data((size_t)(code_end));
+	push_data((size_t)(&code_end));
 } NATIVE_ENTRY(code_end,"CEND",code_ptr);
 
 NATIVE_CODE(at){
@@ -173,25 +180,44 @@ NATIVE_CODE(set_value){
 	*ref = val;
 } NATIVE_ENTRY(set_value,"!",at);
 
+NATIVE_CODE(char_at){
+	push_data((size_t)(*((char *)pop_data())));
+} NATIVE_ENTRY(char_at,"c@",set_value);
+
+NATIVE_CODE(char_set_value){
+	char *ref = (char *)pop_data();
+	char val = (char)pop_data();
+	*ref = val;
+} NATIVE_ENTRY(char_set_value,"c!",char_at);
+
 NATIVE_CODE(literal){
 	push_data(*inst_ptr++);
-} NATIVE_ENTRY(literal,"LITERAL",set_value);
+} NATIVE_ENTRY(literal,"LITERAL",char_set_value);
 
-NATIVE_CODE(brk){
-	if(brk((void *)pop_data()))error_exit("BRK error!");
-//	printf("%d\n", sbrk(0));
-} NATIVE_ENTRY(brk,"BRK",literal);
-
-NATIVE_CODE(sbrk){
-	size_t old_end = (size_t)sbrk(pop_data());
-	if(~old_end)push_data(old_end);//error if -1, i.e ~old_end is 0
-	else error_exit("SBRK error!");
-//	printf("%d\n", sbrk(0));
-} NATIVE_ENTRY(sbrk,"SBRK",brk);
+NATIVE_CODE(m_set_end){
+	size_t addr = pop_data();
+	size_t temp = page_size - 1;
+	addr += temp;
+	addr &= ~temp;
+	if(addr >= (size_t)code_spc + data_store_size)error_exit("data overflow: mremap");
+	code_end = (size_t*)addr;
+	size_t trimmed_size = addr - (size_t)code_spc;//beware pointer size
+	//The Linux kernel's virtual memory manager is "lazy" --
+	//it only allocates physical memory to a process once it is read from
+	//or written to. Here, memory beyond the new address is freed from this
+	//process and then the freed virtual memory address range is reclaimed,
+	//to prevent the kernel from placing anything else within it, and,
+	//by so doing, prevent this process from expanding into it.
+	void *res = MAP_FAILED;
+	res = mremap(code_spc, data_store_size, trimmed_size, 0);
+	if(MAP_FAILED == res)error_exit("mremap failed for m_set_end (first time)");
+	res = mremap(code_spc, trimmed_size, data_store_size, 0);
+	if(MAP_FAILED == res)error_exit("mremap failed for m_set_end (second time)");
+} NATIVE_ENTRY(m_set_end,"M_SET_END",literal);
 
 NATIVE_CODE(drop){
 	(void)pop_data();
-} NATIVE_ENTRY(drop,"DROP",sbrk);
+} NATIVE_ENTRY(drop,"DROP",m_set_end);
 
 NATIVE_CODE(rdrop){
 	(void)pop_proc();
@@ -226,7 +252,7 @@ NATIVE_CODE(here){
 } NATIVE_ENTRY(here,"HERE",r_to_s_copy);
 
 NATIVE_CODE(dot){
-	printf("%d\n",pop_data());
+	printf("%zd\n",pop_data());
 } NATIVE_ENTRY(dot,".",here);
 
 NATIVE_CODE(mul){
@@ -253,9 +279,13 @@ NATIVE_CODE(add){
 	push_data(val1+val2);
 } NATIVE_ENTRY(add,"+",sub);
 
+NATIVE_CODE(not){
+	push_data(pop_data() ? 0 : ~0);// -1 or ~0 is TRUE, 0 is FALSE
+} NATIVE_ENTRY(not, "NOT", add);
+
 NATIVE_CODE(bnot){
 	push_data(~pop_data());
-} NATIVE_ENTRY(bnot,"BNOT",add);
+} NATIVE_ENTRY(bnot,"BNOT",not);
 
 NATIVE_CODE(bor){
 	size_t val2 = pop_data();
@@ -269,16 +299,44 @@ NATIVE_CODE(band){
 	push_data(val1&val2);
 } NATIVE_ENTRY(band,"BAND",bor);
 
+NATIVE_CODE(gt){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1<=val2);
+	not_native();//In C, TRUE is 1, while I want TRUE to be -1
+} NATIVE_ENTRY(gt,">",band);
+
+NATIVE_CODE(lt){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1>=val2);
+	not_native();//In C, TRUE is 1, while I want TRUE to be -1
+} NATIVE_ENTRY(lt,"<",gt);
+
+NATIVE_CODE(ge){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1<val2);
+	not_native();//In C, TRUE is 1, while I want TRUE to be -1
+} NATIVE_ENTRY(ge,">=",lt);
+
+NATIVE_CODE(le){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1>val2);
+	not_native();//In C, TRUE is 1, while I want TRUE to be -1
+} NATIVE_ENTRY(le,"<=",ge);
+
 THREADED_CODE(cell) = {
 	(size_t)&literal_entry,
 	sizeof data_ptr,
 	(size_t)&ret_entry,
-}; THREADED_ENTRY(cell,"CELL",band);
+}; THREADED_ENTRY(cell,"CELL",le);
 
 NATIVE_CODE(call){
 	struct entry *xt = (struct entry *)pop_data();
 #ifdef DEBUG
-	printf("inst_ptr: %u after %s (%u->%u)\n", inst_ptr, xt->name, xt, xt->code);
+	printf("inst_ptr: %p after %s (%p->%p)\n", inst_ptr, xt->name, xt, (void*)xt->code.threaded);
 	if(!xt->code_size)puts("native");
 #endif
 	if(xt->code_size){
@@ -297,7 +355,7 @@ void inner_interpreter(void){
 	inst_ptr_copy++;
 	do{
 #ifdef DEBUG
-		printf("calling with inst_ptr: %u\n", inst_ptr);
+		printf("calling with inst_ptr: %p\n", inst_ptr);
 		show_proc_native();
 #endif
 		push_data(*(inst_ptr++));
@@ -307,7 +365,24 @@ void inner_interpreter(void){
 	inst_ptr = old_inst_ptr;
 }
 
+NATIVE_CODE(number){
+	char *empty = "";
+	char **test = &empty;
+	char *word = (char *)pop_data();
+	size_t num = (size_t)strtol(word, test, 0);
+	if('\0' == **test && *test > word)push_data(num);
+	else {
+		printf("%s is not a valid number\n", word);
+		push_data((size_t)word);
+		//recover_interpreter();
+	}
+} NATIVE_ENTRY(number,"#",call);
+
 struct entry *head;//FORWARD DECLARATION
+
+NATIVE_CODE(head){
+	push_data((size_t)&head);
+} NATIVE_ENTRY(head,"HEAD",number);
 
 NATIVE_CODE(exec){//TODO use this to run threaded code from native code?
 	char *word = (char *)pop_data();
@@ -315,14 +390,23 @@ NATIVE_CODE(exec){//TODO use this to run threaded code from native code?
 	while(current){
 		if(!strcmp(word, current->name)){
 			push_data((size_t)&current);
+//			show_data_native();
+//			show_proc_native();
+//			here_native();
+//			dot_native();
 			inner_interpreter();
+//			show_data_native();
+//			show_proc_native();
+//			here_native();
+//			dot_native();
+//			puts("jjjjjjjjjjjjj");
 			return;
 		}
 		current = current->next;
 	}
-	push_data(atoi(word));//XXX TODO temporary, errors give 0
-//	puts("********word not found!");
-} NATIVE_ENTRY(exec,"EXEC",call);
+	push_data((size_t)word);
+	number_native();
+} NATIVE_ENTRY(exec,"EXEC",head);
 
 static char word[0x100];
 
@@ -364,8 +448,7 @@ NATIVE_CODE(xaddr){
 	push_data((size_t)temp->code.threaded);
 } NATIVE_ENTRY(xaddr, "XADDR", quote);
 
-NATIVE_CODE(see){
-	quote_native();
+NATIVE_CODE(seext){
 	struct entry *xt = (struct entry*)pop_data();
 	if(!xt->code_size){
 		puts("Native code.");
@@ -384,10 +467,10 @@ NATIVE_CODE(see){
 //				printf("%d ",*(++code));
 //			}
 		}
-		else printf("%d ",*code);
+		else printf("%zd ",*code);
 	}
 	puts("");
-} NATIVE_ENTRY(see,"see",xaddr);
+} NATIVE_ENTRY(seext,"seext",xaddr);
 
 NATIVE_CODE(words){
 	struct entry *current = head;
@@ -396,7 +479,7 @@ NATIVE_CODE(words){
 		current = current->next;
 	}
 	puts("");
-} NATIVE_ENTRY(words,"WORDS",see);
+} NATIVE_ENTRY(words,"WORDS",seext);
 
 NATIVE_CODE(prompt){
 	size_t *ptr = data_stack;
@@ -404,7 +487,7 @@ NATIVE_CODE(prompt){
 		printf("...");
 		ptr = data_ptr - 5;
 	}
-	while(ptr < data_ptr)printf("%d ", *ptr++);
+	while(ptr < data_ptr)printf("%zd ", *ptr++);
 	printf(" >>> ");
 } NATIVE_ENTRY(prompt,"PROMPT",words);
 
@@ -417,6 +500,7 @@ NATIVE_CODE(outer_interpreter){
 //	}
 //	return;
 	int word_index = 0;
+	//printf("%s %d\n", __FILE__, __LINE__);
 	while(1){
 		cin_native();
 		int in = (int)pop_data();
@@ -428,6 +512,8 @@ NATIVE_CODE(outer_interpreter){
 			if(word_index){
 				word[word_index] = '\0';
 				word_index = 0;
+				//puts(word);
+				//printf("%s %d\n", __FILE__, __LINE__);
 				push_data((size_t)word);
 				exec_native();
 			}
@@ -444,13 +530,8 @@ NATIVE_CODE(allot){
 	code_ptr_native();
 	set_value_native();
 	if(code_ptr >= code_end){//CPTR CEND < ifd{ RET }if
-		push_data(STACK_SIZE * sizeof(size_t));
 		here_native();
-		add_native();
-		s_to_r_copy_native(); r_to_s_native();//: DUP [ @r r> ] ;
-		brk_native();
-		code_end_native();
-		set_value_native();
+		m_set_end_native();
 	}
 } NATIVE_ENTRY(allot,"ALLOT",outer_interpreter);
 
@@ -466,6 +547,7 @@ NATIVE_CODE(start_threaded_code){
 	int in;
 	int word_index = 0;
 	int got_delimiter = 0;
+	//printf("%s %d\n", __FILE__, __LINE__);
 start:
 	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if(in > ' '){
@@ -483,7 +565,11 @@ start:
 		if(word_index >= 0x100)error_exit("word length >256");
 	}
 	if(in == EOF)error_exit("cannot compile, EOF");
+#ifdef DEBUG
+	printf("word to compile: %s\n", word);
+#endif
 	struct entry *current = head;
+	//printf("%s %d\n", __FILE__, __LINE__);
 	while(current){
 		if(!strcmp(word, current->name)){
 			push_data((size_t)current);
@@ -493,9 +579,11 @@ start:
 		current = current->next;
 	}
 	if(NULL != current)goto start;
+	//printf("%s %d\n", __FILE__, __LINE__);
+	push_data((size_t)word);
+	number_native();
 	push_data((size_t)&literal_entry);
 	compile_native();
-	push_data((size_t)atoi(word));//XXX TODO temporary, errors give 0
 	compile_native();
 	goto start;
 } NATIVE_ENTRY(start_threaded_code, "[", compile);
@@ -527,11 +615,15 @@ NATIVE_CODE(colon){
 } NATIVE_ENTRY(colon, ":", start_threaded_code);
 
 NATIVE_CODE(semicolon){
-//	puts("jjjjjjjjjjjjjjjjjjjjjjj");
-	if(((size_t)&ret_entry != *(code_ptr - 1)) && ((size_t)&literal_entry != *code_ptr - 2)){//must end with a callable RET
-		push_data((size_t)&ret_entry);
-		compile_native();
-	}
+	//puts("jjjjjjjjjjjjjjjjjjjjjjj");
+	//printf("%s\n", temp_entry_store->name);
+	//*code_ptr = 0xFECC;
+	//printf("%x\n", *code_ptr);
+//	//printf("%x\n", *code_ptr + 8);
+	//printf("%s %d\n", __FILE__, __LINE__);
+	push_data((size_t)&ret_entry);//Always insert a RET, just in case one is missing.
+	compile_native();
+	//printf("%s %d\n", __FILE__, __LINE__);
 	size_t* after_code = code_ptr;
 	struct entry *internal_ptr = temp_entry_store;
 	for(; internal_ptr < temp_entry_ptr; ++internal_ptr){
@@ -624,26 +716,50 @@ execute:
 	}
 } NATIVE_ENTRY(interactive_if, "iif{", line_comment);
 
-NATIVE_CODE(not){
-	push_data(pop_data() ? 0 : ~0);// -1 or ~0 is TRUE, 0 is FALSE
-} NATIVE_ENTRY(not, "NOT", interactive_if);
+struct entry *head = &interactive_if_entry;
 
-struct entry *head = &not_entry;
+int main(int argc, char** argv){
+	page_size = (size_t)sysconf(_SC_PAGESIZE);
+	size_t phys_pages = (size_t)sysconf(_SC_PHYS_PAGES);
+	size_t pages_to_use = phys_pages >> 4;//Need free VM space; may avoid overflow
+	data_store_size = pages_to_use * page_size;
+	if(pages_to_use != data_store_size/page_size){//overflow may indicate PAE
+		puts("physical memory larger than maximum size_t value!");
+		data_store_size = ((size_t)1) << (__WORDSIZE - 4);
+	}
+	code_spc = (size_t*)mmap(NULL, data_store_size,
+			PROT_READ | PROT_WRITE | PROT_EXEC,
+			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if(MAP_FAILED == code_spc)error_exit("mmap failed for code_spc");
+	code_end = (size_t*)((size_t)code_spc + page_size);//beware pointer size
+	code_ptr = code_spc;
 
-int main(void){
-	push_data(0);
-	sbrk_native();
-	code_ptr = code_end = (size_t*)pop_data();
-	push_data((size_t)(code_ptr + STACK_SIZE));
-	brk_native();
-	push_data(0);
-	sbrk_native();
-	code_end = (size_t*)pop_data();
-	
 	global_in = fopen("core.hfs", "r");
 	outer_interpreter_native();
-	fclose(global_in);
-	global_in = stdin;
-	outer_interpreter_native();
+	fclose(global_in); global_in = NULL;
+//	global_in = fopen("hello.hfs", "r");
+//	outer_interpreter_native();
+//	fclose(global_in); global_in = NULL;
+	if(1 == argc){
+		global_in = stdin;
+		outer_interpreter_native();
+		return 0;
+	}
+	int ii = 1;
+	for(; ii < argc; ++ii){
+		if(strcmp(argv[ii], "-")){
+			global_in = fopen(argv[ii], "r");
+			if(!global_in){
+				printf("file %s not found\n", argv[ii]);
+				return 1;
+			}
+			outer_interpreter_native();
+			fclose(global_in); global_in = NULL;
+		}
+		else{
+			global_in = stdin;
+			outer_interpreter_native();
+		}
+	}
 	return 0;
 }
