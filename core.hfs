@@ -15,6 +15,7 @@
 : ~~~					~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
 : ~~					~ LITERAL ~ LITERAL ~ , ~ ~ ~ LITERAL ~ , ~ , ;
 : ~~~					~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ ~ ~~ , ~~ LITERAL ~~ , ~~ , ;
+: char					[ BSW c@ ] ;
 : [char]				[ char [LITERAL] ] ;
 : (					[char] ) ~ SKIPBL ;
 ( as should this )
@@ -54,13 +55,13 @@
 					[ r> CELL+ BAND + ] ; \ addr
 : JMPNZ		( n -- )		[ r> (JMPNZ) >r RET ] ;
 : JMPNZL	( similar to CALL )	[ r@ (JMPNZ) >r RET ] ;
-: (JMPNZP)	( n raddr -- n addr )	[ SWAP @r SWAP (JMPNZ) r> SWAP ] ;
+: (JMPNZP)	( n raddr -- n addr )	[ >r DUP r> (JMPNZ) ] ;
 : JMPNZP	( n -- n )		[ r> (JMPNZP) >r RET ] ; \ preserv
 : JMPNZPL	( similar to CALL )	[ r@ (JMPNZP) >r RET ] ; \ preserv
 
 : TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;
-: if{		( -- addr )		~~ NOT ~~ JMPNZP ~ TEMPALLOT ;
-: ifd{		( -- addr )		~~ NOT ~~ JMPNZ  ~ TEMPALLOT ;
+: ifd{		( -- addr )		~~ NOT ~~ JMPNZ ~ TEMPALLOT ;
+: if{		( -- addr )		~~ DUP ~ ifd{ ;
 : }if		( addr -- )		[ HERE SWAP ! ] ;
 : }else{	( addr -- addr )	~ }if ~~ NOT ~ if{ ;
 : }elsed{	( addr -- addr )	~ }if ~~ NOT ~ ifd{ ;
@@ -77,6 +78,15 @@
 : ielse{	( n -- NOTn )		[ NOT iif{ ] ;
 : iifd{		( n -- )		[ iif{ DROP ] ;
 : ielsed{	( n -- )		[ ielse{ DROP ] ;
+
+DPTR @ >var DPTR_SAVED
+PPTR @ >var PPTR_SAVED
+: PTRSL		( addr addr -- )	[ @ SWAP ! ] ;
+: DPTRS		( -- )			[ DPTR_SAVED DPTR PTRSL ] ;
+: DPTRS		( -- )			[ DPTR @ DPTR_SAVED ! ] ;
+: PPTRS		( -- )			[ PPTR @ PPTR_SAVED ! ] ;
+: DPTRL		( -- )			[ DPTR_SAVED @ DPTR ! ] ;
+: PPTRL		( -- )			[ PPTR_SAVED @ PPTR ! ] ;
 
 0 BNOT value CELL_MAX
 CELL_MAX DUP 2 / - value SIGNED_MIN
@@ -98,3 +108,33 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 : deletion_mark	( - "name" - )		~ HERE ~ : ~ [LITERAL] ~~ TRIM ~ ; ;
 
 : ."		( - "text" - )		[ HERE ,nh" n. TRIM ] ;
+: aligned_,nh"	( - "text" - )		[ ,nh" DUP HERE SWAP - ]
+					loop{ [ DUP CELL % ] }loopd{
+					[ 0 c, 1+ ] }loop ~ DROP ;
+: ~."		( - "text" - )		~~ JMP
+					[ TEMPALLOT aligned_,nh" SWAP ]
+					[ }if [LITERAL] ] ~~ n. ;
+
+
+\ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ;
+
+
+,nh" ]]" value DELIM
+: [[					[ BSW DUP DELIM CSTRCMP NOT ]
+					ifd{ [ DROP RET ] }if
+					[ DUP WORDSEARCH ]
+					if{ [ LIT, LIT, , ] }elsed{
+					[ LIT, LIT, LIT, LIT ]
+					[ LIT, LIT, # , ] }if GOTO [[ ;
+\ : ]] ;	\ instead of ANSI FORTH's >DOES
+
+
+\ [ LIT, LIT, LIT, LIT LIT, LIT, # , ]
+\ [ LIT, LIT LIT, val ]
+\ [ LIT val ]
+
+: makestar 				[ HERE SWAP ]
+					loop{ ~ 1- }loop{
+					[char] * ~ , }loop 
+					[ DROP 0 , : [LITERAL] ]
+					[[ n. ]] ;

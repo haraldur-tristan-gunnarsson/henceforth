@@ -3,7 +3,8 @@ WARNINGS =  -Wall -Wextra #-pedantic #-Wstrict-prototypes -Wpointer-arith -Wcast
 			-Wwrite-strings \
 			-Wredundant-decls -Wnested-externs -Winline \
 			-Wuninitialized# -Wconversion -Wmissing-declarations -Wshadow -Wmissing-prototypes
-CFLAGS = --std=gnu11 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
+CFLAGS = --std=gnu89 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
+#CFLAGS = --std=gnu11 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
 #perhaps better to use gnu89?
 #CFLAGS = --std=c11 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
 LIBS = -lm

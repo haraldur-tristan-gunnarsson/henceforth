@@ -13,6 +13,10 @@ FILE *global_in = NULL;
 
 void error_exit(char *message){
 	puts(message);
+#ifdef DEBUG
+	size_t *crasher = NULL;
+	crasher = (size_t*)*crasher;
+#endif
 	exit(-1);
 }
 
@@ -156,6 +160,7 @@ NATIVE_CODE(ret){
 
 NATIVE_CODE(cin){
 	push_data((size_t)getc(global_in));
+//	printf("%d\n",read_data());
 } NATIVE_ENTRY(cin,"CIN",ret);
 
 NATIVE_CODE(pagesize){
@@ -170,9 +175,17 @@ NATIVE_CODE(code_end){
 	push_data((size_t)(&code_end));
 } NATIVE_ENTRY(code_end,"CEND",code_ptr);
 
+NATIVE_CODE(data_ptr){
+	push_data((size_t)(&data_ptr));
+} NATIVE_ENTRY(data_ptr,"DPTR",code_end);
+
+NATIVE_CODE(proc_ptr){
+	push_data((size_t)(&proc_ptr));
+} NATIVE_ENTRY(proc_ptr,"PPTR",data_ptr);
+
 NATIVE_CODE(at){
 	push_data(*((size_t *)pop_data()));
-} NATIVE_ENTRY(at,"@",code_end);
+} NATIVE_ENTRY(at,"@",proc_ptr);
 
 NATIVE_CODE(set_value){
 	size_t *ref = (size_t *)pop_data();
@@ -267,11 +280,17 @@ NATIVE_CODE(div){
 	push_data(val1/val2);
 } NATIVE_ENTRY(div,"/",mul);
 
+NATIVE_CODE(mod){
+	size_t val2 = pop_data();
+	size_t val1 = pop_data();
+	push_data(val1%val2);
+} NATIVE_ENTRY(mod,"%",div);
+
 NATIVE_CODE(sub){
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val1-val2);
-} NATIVE_ENTRY(sub,"-",div);
+} NATIVE_ENTRY(sub,"-",mod);
 
 NATIVE_CODE(add){
 	size_t val2 = pop_data();
@@ -369,6 +388,7 @@ NATIVE_CODE(number){
 	char *empty = "";
 	char **test = &empty;
 	char *word = (char *)pop_data();
+//	puts(word);
 	size_t num = (size_t)strtol(word, test, 0);
 	if('\0' == **test && *test > word)push_data(num);
 	else {
@@ -384,52 +404,29 @@ NATIVE_CODE(head){
 	push_data((size_t)&head);
 } NATIVE_ENTRY(head,"HEAD",number);
 
-NATIVE_CODE(exec){//TODO use this to run threaded code from native code?
-	char *word = (char *)pop_data();
-	struct entry *current = head;
-	while(current){
-		if(!strcmp(word, current->name)){
-			push_data((size_t)&current);
-//			show_data_native();
-//			show_proc_native();
-//			here_native();
-//			dot_native();
-			inner_interpreter();
-//			show_data_native();
-//			show_proc_native();
-//			here_native();
-//			dot_native();
-//			puts("jjjjjjjjjjjjj");
-			return;
-		}
-		current = current->next;
-	}
-	push_data((size_t)word);
-	number_native();
-} NATIVE_ENTRY(exec,"EXEC",head);
-
 static char word[0x100];
 
 NATIVE_CODE(bsw){//bsw: blank-separated word
+//TODO allow preceding whitespace
 	int in;
 	int word_index = 0;
 	static char word[0x100];
 	while(cin_native(),(in = (int)pop_data()) > ' '){
+		if(in == EOF)error_exit("cannot continue, EOF");
 		word[word_index] = (char)in;
 		word_index++;
 		if(word_index >= 0x100)error_exit("word length >=256");
 	}
 	word[word_index] = '\0';
 	push_data((size_t)word);
-} NATIVE_ENTRY(bsw, "BSW", exec);
+} NATIVE_ENTRY(bsw, "BSW", head);
 
 NATIVE_CODE(nprint){
 	puts((char *)pop_data());
 } NATIVE_ENTRY(nprint, "n.", bsw);
 
-NATIVE_CODE(quote){
-	bsw_native();
-	char * word = (char *) pop_data();
+NATIVE_CODE(wordsearch){
+	char *word = (char *) pop_data();
 	struct entry *current = head;
 	while(current){
 		if(!strcmp(word, current->name)){
@@ -438,9 +435,31 @@ NATIVE_CODE(quote){
 		}
 		current = current->next;
 	}
-	puts("********word not found!");
-	return;
-} NATIVE_ENTRY(quote, "'", nprint);
+	push_data((size_t)0);//if word not found
+} NATIVE_ENTRY(wordsearch, "WORDSEARCH", nprint);
+
+NATIVE_CODE(exec){//TODO use this to run threaded code from native code?
+//	printf("%s %d\n", __FILE__, __LINE__);
+	char *word = (char *)read_data();
+	wordsearch_native();
+	size_t xt = pop_data();
+	if(xt){
+		push_data((size_t)&xt);
+		inner_interpreter();
+	}
+	else{
+		push_data((size_t)word);
+		number_native();
+	}
+} NATIVE_ENTRY(exec, "EXEC", wordsearch);
+
+NATIVE_CODE(quote){
+	bsw_native();
+	wordsearch_native();
+	size_t xt = pop_data();
+	if(xt)push_data(xt);
+	else puts("********word not found!");
+} NATIVE_ENTRY(quote, "'", exec);
 
 NATIVE_CODE(xaddr){
 	struct entry *temp = (struct entry*)pop_data();
@@ -448,7 +467,7 @@ NATIVE_CODE(xaddr){
 	push_data((size_t)temp->code.threaded);
 } NATIVE_ENTRY(xaddr, "XADDR", quote);
 
-NATIVE_CODE(seext){
+NATIVE_CODE(seext){//TODO need a DUMP as well, like xxd
 	struct entry *xt = (struct entry*)pop_data();
 	if(!xt->code_size){
 		puts("Native code.");
@@ -542,51 +561,39 @@ NATIVE_CODE(compile){// ( x -- )
 	set_value_native();
 } NATIVE_ENTRY(compile, ",", allot);
 
+NATIVE_CODE(cstrcmp){// ( s1 s2 -- i )
+	char *s2 = (char *)pop_data();
+	char *s1 = (char *)pop_data();
+	push_data((size_t)strcmp(s1, s2));
+} NATIVE_ENTRY(cstrcmp, "CSTRCMP", compile);
+
 NATIVE_CODE(start_threaded_code){
-	static const int delimiter = ']';
-	int in;
-	int word_index = 0;
-	int got_delimiter = 0;
-	//printf("%s %d\n", __FILE__, __LINE__);
 start:
-	while(cin_native(),(in = (int)pop_data()) != EOF){
-		if(in > ' '){
-			got_delimiter = 0;
-			if(delimiter == in && !word_index)got_delimiter = 1;
-			word[word_index] = (char)in;
-			word_index++;
-		}
-		else if(word_index){
-			if(got_delimiter)return;
-			word[word_index] = '\0';
-			word_index = 0;
-			break;
-		}
-		if(word_index >= 0x100)error_exit("word length >256");
-	}
-	if(in == EOF)error_exit("cannot compile, EOF");
+//	printf("%s %d\n", __FILE__, __LINE__);
+	bsw_native();
+	char *word = (char *)pop_data();
+	static const char *delimiter = "]";
+//	printf("%s %p -- %s %p\n", delimiter, delimiter, word, word);
+	if(!strcmp(word, delimiter))return;
 #ifdef DEBUG
 	printf("word to compile: %s\n", word);
 #endif
-	struct entry *current = head;
-	//printf("%s %d\n", __FILE__, __LINE__);
-	while(current){
-		if(!strcmp(word, current->name)){
-			push_data((size_t)current);
-			compile_native();
-			break;
-		}
-		current = current->next;
-	}
-	if(NULL != current)goto start;
-	//printf("%s %d\n", __FILE__, __LINE__);
 	push_data((size_t)word);
-	number_native();
-	push_data((size_t)&literal_entry);
-	compile_native();
-	compile_native();
+	wordsearch_native();
+	size_t xt = pop_data();
+	if(xt){
+		push_data((size_t)xt);
+		compile_native();
+	}
+	else{
+		push_data((size_t)&literal_entry);
+		compile_native();
+		push_data((size_t)word);
+		number_native();
+		compile_native();
+	}
 	goto start;
-} NATIVE_ENTRY(start_threaded_code, "[", compile);
+} NATIVE_ENTRY(start_threaded_code, "[", cstrcmp);
 
 NATIVE_CODE(colon){
 	if(temp_entry_ptr > temp_entry_store + TEMP_ENTRY_MAX)error_exit("too many unfinalized labels, limit TEMP_ENTRY_MAX!!!");
@@ -662,17 +669,12 @@ NATIVE_CODE(skip_bl){
 	}
 } NATIVE_ENTRY(skip_bl, "SKIPBL", semicolon);
 
-NATIVE_CODE(char){
-	bsw_native();
-	push_data((size_t)(((char *)pop_data())[0]));
-} NATIVE_ENTRY(char, "char", skip_bl);
-
 NATIVE_CODE(line_comment){
 	int in;
 	while(cin_native(),(in = (int)pop_data()) != EOF){
 		if('\n' == in)return;
 	}
-} NATIVE_ENTRY(line_comment, "\\", char);
+} NATIVE_ENTRY(line_comment, "\\", skip_bl);
 
 NATIVE_CODE(interactive_if){
 //	static const char * end_word = "}";
@@ -723,7 +725,7 @@ int main(int argc, char** argv){
 	size_t phys_pages = (size_t)sysconf(_SC_PHYS_PAGES);
 	size_t pages_to_use = phys_pages >> 4;//Need free VM space; may avoid overflow
 	data_store_size = pages_to_use * page_size;
-	if(pages_to_use != data_store_size/page_size){//overflow may indicate PAE
+	if(pages_to_use != data_store_size/page_size){//overflow --> PAE
 		puts("physical memory larger than maximum size_t value!");
 		data_store_size = ((size_t)1) << (__WORDSIZE - 4);
 	}
@@ -737,9 +739,6 @@ int main(int argc, char** argv){
 	global_in = fopen("core.hfs", "r");
 	outer_interpreter_native();
 	fclose(global_in); global_in = NULL;
-//	global_in = fopen("hello.hfs", "r");
-//	outer_interpreter_native();
-//	fclose(global_in); global_in = NULL;
 	if(1 == argc){
 		global_in = stdin;
 		outer_interpreter_native();
