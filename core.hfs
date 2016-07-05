@@ -134,8 +134,8 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 \ [ LIT, LIT LIT, val ]
 \ [ LIT val ]
 
-: DOES:		( addr -- )		[ : [LITERAL] ] ;
-: PRINT:	( addr -- )		~ DOES: [[ n. RET ]] ;
+: DOES:		( addr -- )		[ : [LITERAL] ] ; \ value?
+: PRINT:	( addr -- )		~ DOES: [[ n. RET ]] ~ ; ;
 
 : message"	( - "text" "name" - )	[ ,nh" PRINT: ] ;
 
@@ -146,8 +146,10 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 					[ DROP 0 , PRINT: ] ;
 
 : DOES>		( addr -- )		~ [LITERAL] ~~ JMP
-					[ TEMPALLOT }if RDROP RET ] ;
-					
+					[ TEMPALLOT }if ; RDROP RET ] ;
+
+\ need to write a DUMP word as soon as possible
+
 : 'XNAME	( - "word" - )		[ ' XNAME ] ;
 
 \ : actor"	( - "text" "name" - )	[ ,nh" DOES: HEAD XNAME DOES> ]

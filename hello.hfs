@@ -34,6 +34,9 @@ message"
 
 
 \ local variables would be very nice for this! (base pointer needed?)
+\ just having a base pointer, without variable names, would be useful...
+\ perhaps, a separate stack just to manage such things? optional
+\ maybe have a temporary "alias" dictionary as well, to give meaningful names for local variables -- this could be coded within this language!
 : fizzbuzz	( n -- )	[ 0 ] loop{ [ 1+ 2DUP >= ] ( n c p )
 				}loopd{ [ -1 >r ] ( n c )
 					[ DUP 3 % NOT ] ifd{
