@@ -40,6 +40,7 @@
 : RDUP		( r:n -- r:n r:n )	[ r@ >r ] ;
 : DUP		( n -- n n )		[ @r r> ] ;
 : OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
+: 2DUP		( n1n2 -- n1n2 n1n2 )	[ OVER OVER ] ;
 : TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
 : BOOL		( n -- bool )		[ NOT NOT ] ;
 
@@ -133,8 +134,21 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 \ [ LIT, LIT LIT, val ]
 \ [ LIT val ]
 
-: makestar 				[ HERE SWAP ]
+: DOES:		( addr -- )		[ : [LITERAL] ] ;
+: PRINT:	( addr -- )		~ DOES: [[ n. RET ]] ;
+
+: message"	( - "text" "name" - )	[ ,nh" PRINT: ] ;
+
+\ a do loop would be useful here TODO
+: makestar 	( n - "name" - )	[ HERE SWAP 1+ ]
 					loop{ ~ 1- }loop{
-					[char] * ~ , }loop 
-					[ DROP 0 , : [LITERAL] ]
-					[[ n. ]] ;
+					[char] * ~ c, }loop 
+					[ DROP 0 , PRINT: ] ;
+
+: DOES>		( addr -- )		~ [LITERAL] ~~ JMP
+					[ TEMPALLOT }if RDROP RET ] ;
+					
+: 'XNAME	( - "word" - )		[ ' XNAME ] ;
+
+\ : actor"	( - "text" "name" - )	[ ,nh" DOES: HEAD XNAME DOES> ]
+\					[ n. n. ] ;

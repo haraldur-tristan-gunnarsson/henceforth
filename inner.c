@@ -220,7 +220,7 @@ NATIVE_CODE(m_set_end){
 	//or written to. Here, memory beyond the new address is freed from this
 	//process and then the freed virtual memory address range is reclaimed,
 	//to prevent the kernel from placing anything else within it, and,
-	//by so doing, prevent this process from expanding into it.
+	//by so doing, preventing this process from expanding into it.
 	void *res = MAP_FAILED;
 	res = mremap(code_spc, data_store_size, trimmed_size, 0);
 	if(MAP_FAILED == res)error_exit("mremap failed for m_set_end (first time)");
@@ -482,14 +482,16 @@ NATIVE_CODE(seext){//TODO need a DUMP as well, like xxd
 		for(; current && current != (struct entry*)(*code); current = current->next);
 		if(current){
 			printf("%s ", current->name);
-//			if(&literal_entry == current){
-//				printf("%d ",*(++code));
-//			}
 		}
 		else printf("%zd ",*code);
 	}
 	puts("");
 } NATIVE_ENTRY(seext,"seext",xaddr);
+
+NATIVE_CODE(xname){
+	struct entry *xt = (struct entry*)pop_data();
+	push_data((size_t)xt->name);
+} NATIVE_ENTRY(xname,"XNAME",seext);
 
 NATIVE_CODE(words){
 	struct entry *current = head;
@@ -498,7 +500,7 @@ NATIVE_CODE(words){
 		current = current->next;
 	}
 	puts("");
-} NATIVE_ENTRY(words,"WORDS",seext);
+} NATIVE_ENTRY(words,"WORDS",xname);
 
 NATIVE_CODE(prompt){
 	size_t *ptr = data_stack;

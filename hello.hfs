@@ -16,3 +16,35 @@ deletion_mark hello_mark
 ." Now using deletion_mark hello_mark." hello_mark
 ." Now HERE is:" HERE .
 ." And there are fewer WORDS:" WORDS
+
+message"
+ *** 
+ * * 
+ *** " box
+." here is a box:" box
+
+message"
+  *  
+ *** 
+*****" triangle
+." here is a triangle:" triangle
+
+: house [ triangle box ] ;
+." here is a house:" house
+
+
+\ local variables would be very nice for this! (base pointer needed?)
+: fizzbuzz	( n -- )	[ 0 ] loop{ [ 1+ 2DUP >= ] ( n c p )
+				}loopd{ [ -1 >r ] ( n c )
+					[ DUP 3 % NOT ] ifd{
+						~." Fizz" [ RDROP 0 >r ]
+					}if
+					[ DUP 5 % NOT ] ifd{
+						~." Buzz" [ RDROP 0 >r ]
+					}if
+					~ r> ifd{ [ DUP . ] }if
+				}loop [ DROP DROP ] ;
+
+."
+
+commencing fizzbuzz to 15:" 15 fizzbuzz
