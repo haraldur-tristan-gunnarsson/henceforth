@@ -21,6 +21,10 @@
 ( as should this )
 
 : see		( -- )			[ ' seext ] ;
+: x.		( n -- )		[ (x.) NL ] ;
+: [emit]	( - c - )		~ [char] ~~ emit ;
+: (0x.)		( n -- )		[emit] 0 [emit] x ~ (x.) ;
+: 0x.		( n -- )		[ (0x.) NL ] ;
 
 : CELLS 	( n -- n )		[ CELL * ] ;
 : CELL-		( n -- n )		[ CELL - ] ;
@@ -72,6 +76,9 @@
 : }loop{	( -- addr )		~ if{ ;
 : }loopd{	( -- addr )		~ ifd{ ;
 : }loop		( addr addr -- )	[ SWAP ~JMP, }if ] ;
+: do{		( -- addr )		~ HERE ;
+: }dod		( addr -- )		~~ JMPNZ ~ , ; \ [ LIT, JMPNZ , ]
+: }do		( addr -- )		~~ DUP ~ }dod ;
 
 : value		( n - "name" - )	[ : [LITERAL] ; ] ;
 : var		( - "name" - )		[ HERE CELL ALLOT value ] ;
@@ -154,3 +161,36 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 
 \ : actor"	( - "text" "name" - )	[ ,nh" DOES: HEAD XNAME DOES> ]
 \					[ n. n. ] ;
+
+: emit_xxd	( n -- )		[ 0x7f BAND DUP 0x20 <= ]
+					ifd{ ~ DROP [char] . }if
+					~ emit ;
+: 2DROP		( n n -- )		[ DROP DROP ] ;
+: emit_range	( a a -- )		~ SWAP do{
+						[ DUP c@ emit_xxd ]
+						[ 1+ 2DUP <> ]
+					}dod ~ 2DROP ;
+: >range	( a n -- a a )		[ OVER + ] ;
+: BL		( -- )			[ 0x20 emit ] ;
+: hex_xxd	( n -- )		[ DUP 16 / (x.) 15 BAND (x.) ] ; \ would be better with a right shift -- TODO: add shift primitives
+: hex_range	( a a -- )		~ SWAP do{
+						[ DUP c@ hex_xxd ]
+						[ 1+ 2DUP <> ]
+					}dod ~ 2DROP ;
+: dump_cell	( addr -- )		[ DUP (0x.) ] [emit] :
+					[ BL BL ]
+					[ DUP CELL >range hex_range ]
+					[ BL BL ] [emit] |
+					[ DUP CELL >range emit_range ]
+					[emit] | [ BL BL ]
+					[ @ NAME_OUT NL ] ;
+: align		( n n -- n )		[ 1- BNOT BAND ] ;
+: align_up	( n n -- n )		[ @r 1- + r> align ] ;
+: dump_range	( a a -- )		\ [ CELL align_up SWAP ] do{
+					~ SWAP do{
+						[ DUP dump_cell ]
+						[ CELL+ 2DUP > ]
+					}dod ~ 2DROP ;
+: dump		( a n -- )		[ >range dump_range ] ;
+
+\ how to find out width of terminal (number of columns) for nice output?

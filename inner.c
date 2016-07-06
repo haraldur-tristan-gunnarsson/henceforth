@@ -83,12 +83,20 @@ NATIVE_CODE(reset_stack){
 	data_ptr = data_stack;
 }  NATIVE_ENTRY(reset_stack,"reset_stack",null);
 
+NATIVE_CODE(align_code){//can be used to make dumps easier to read
+	size_t aligner = sizeof(size_t) - 1 ;
+	size_t temp = (size_t)(void*)code_ptr;//BEWARE pointer size
+	temp +=  aligner;
+	temp &= ~aligner;
+	code_ptr = (size_t*)(void*)temp;
+}  NATIVE_ENTRY(align_code,"ALIGN_CODE",reset_stack);
+
 NATIVE_CODE(show_data){
 	size_t *ii;
 	printf("data: ");
 	for(ii = data_stack; ii < data_ptr; ++ii)printf("%zd ", *ii);
 	puts("");
-} NATIVE_ENTRY(show_data,".s",reset_stack);
+} NATIVE_ENTRY(show_data,".s",align_code);
 
 NATIVE_CODE(show_proc){
 	size_t *ii;
@@ -268,11 +276,23 @@ NATIVE_CODE(dot){
 	printf("%zd\n",pop_data());
 } NATIVE_ENTRY(dot,".",here);
 
+NATIVE_CODE(hexprint){
+	printf("%zx",pop_data());
+} NATIVE_ENTRY(hexprint,"(x.)",dot);
+
+NATIVE_CODE(emit){
+	putchar((char)pop_data());
+} NATIVE_ENTRY(emit, "emit", hexprint);
+
+NATIVE_CODE(newline){
+	putchar('\n');
+} NATIVE_ENTRY(newline,"NL",emit);
+
 NATIVE_CODE(mul){
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val1*val2);
-} NATIVE_ENTRY(mul,"*",dot);
+} NATIVE_ENTRY(mul,"*",newline);
 
 NATIVE_CODE(div){
 	size_t val2 = pop_data();
@@ -467,7 +487,15 @@ NATIVE_CODE(xaddr){
 	push_data((size_t)temp->code.threaded);
 } NATIVE_ENTRY(xaddr, "XADDR", quote);
 
-NATIVE_CODE(seext){//TODO need a DUMP as well, like xxd
+NATIVE_CODE(name_out){
+	struct entry *test = (struct entry*)pop_data();
+	struct entry *current = head;
+	for(; current && current != test; current = current->next);
+	if(current)printf("%s", current->name);
+	else printf("%zd",(size_t)test);
+} NATIVE_ENTRY(name_out, "NAME_OUT", xaddr);
+
+NATIVE_CODE(seext){
 	struct entry *xt = (struct entry*)pop_data();
 	if(!xt->code_size){
 		puts("Native code.");
@@ -478,15 +506,12 @@ NATIVE_CODE(seext){//TODO need a DUMP as well, like xxd
 	if(xt->code_size < 0)code_stop = code_ptr;//for unfinished words
 	printf("%d\n",xt->code_size);
 	for(;code < code_stop; ++code){
-		struct entry *current = head;
-		for(; current && current != (struct entry*)(*code); current = current->next);
-		if(current){
-			printf("%s ", current->name);
-		}
-		else printf("%zd ",*code);
+		push_data((size_t)*code);
+		name_out_native();
+		putchar(' ');
 	}
-	puts("");
-} NATIVE_ENTRY(seext,"seext",xaddr);
+	putchar('\n');
+} NATIVE_ENTRY(seext,"seext",name_out);
 
 NATIVE_CODE(xname){
 	struct entry *xt = (struct entry*)pop_data();
@@ -609,6 +634,7 @@ NATIVE_CODE(colon){
 		else if(word_index){
 			word[word_index] = '\0';
 			strcpy(temp_entry_name_ptr, word);
+			align_code_native();//make dumps readable
 			temp_entry_ptr->name = temp_entry_name_ptr;
 			temp_entry_ptr->code.threaded = code_ptr;
 			temp_entry_ptr->can_delete = -1;
