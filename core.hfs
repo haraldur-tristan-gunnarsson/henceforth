@@ -1,20 +1,20 @@
 \ this should be a comment
-: ~					' ' , ' , , ;
-: ~LIT					[ LITERAL LITERAL , ] ;
-: ~,					[ LITERAL , , ] ;
-: [LITERAL]				[ ~LIT , ] ;
-: '[LITERAL]				[ ' [LITERAL] ] ;
-: ~~ 					[ '[LITERAL] LITERAL , , ] ;
-: ~~					[ ' ~LIT , ~, ] ;
-: ~~~					[ ' ~LIT ~LIT ~, ~LIT , ~, ~LIT ~, ~, ] ;
-: ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ LITERAL ~ , ~ , ;
-: ,,					~ LITERAL ~ , ~ , ;
-: ~~					~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ ,, ;
-: ~~					[ ~LIT ~ ,, ] ;
-: ~~					[ LITERAL LITERAL , ~ LITERAL , , ] ;
-: ~~~					~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
-: ~~					~ LITERAL ~ LITERAL ~ , ~ ~ ~ LITERAL ~ , ~ , ;
-: ~~~					~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ ~ ~~ , ~~ LITERAL ~~ , ~~ , ;
+: ~		' ' , ' , , ;
+: ~LIT		[ LITERAL LITERAL , ] ;
+: ~,		[ LITERAL , , ] ;
+: [LITERAL]	[ ~LIT , ] ;
+: '[LITERAL]	[ ' [LITERAL] ] ;
+: ~~ 		[ '[LITERAL] LITERAL , , ] ;
+: ~~		[ ' ~LIT , ~, ] ;
+: ~~~		[ ' ~LIT ~LIT ~, ~LIT , ~, ~LIT ~, ~, ] ;
+: ~~		~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ LITERAL ~ , ~ , ;
+: ,,		~ LITERAL ~ , ~ , ;
+: ~~		~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ ,, ;
+: ~~		[ ~LIT ~ ,, ] ;
+: ~~		[ LITERAL LITERAL , ~ LITERAL , , ] ;
+: ~~~		~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
+: ~~		~ LITERAL ~ LITERAL ~ , ~ ~ ~ LITERAL ~ , ~ , ;
+: ~~~		~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ ~ ~~ , ~~ LITERAL ~~ , ~~ , ;
 : char					[ BSW c@ ] ;
 : [char]				[ char [LITERAL] ] ;
 : (					[char] ) ~ SKIPBL ;
@@ -32,14 +32,29 @@
 : 1+		( n -- n )		[ 1 + ] ;
 : 1-		( n -- n )		[ 1 - ] ;
 
-: (SKIPCELL) [ r> r> CELL+ >r >r ] ;
-: LIT [ r@ @ (SKIPCELL) ] ;
-: LIT, [ r@ @ , (SKIPCELL) ] ;
-: ~~ [ LIT, LIT, ~ ] ;
-: ~~~ [ LIT, LIT, LIT, LIT, LIT, LIT, ~ ] ;
-: ~~ ~ LIT, ~ LIT, ~ ~ ;
-: ~~~ ~~ LIT, ~~ LIT, ~~ LIT, ~ ~ ;
-: ~~~~ ~~~ LIT, ~~~ LIT, ~~~ LIT, ~~ LIT, ~ ~ ;
+: (SKIPCELL)	[ r> r> CELL+ >r >r ] ;
+: LIT		[ r@ @ (SKIPCELL) ] ;
+: LIT,		[ r@ @ , (SKIPCELL) ] ;
+: ~LIT,		[ LIT, LIT, ] ;
+: ~~		[ ~LIT, ~ ] ;
+: ~~LIT,	[ ~LIT, ~LIT, ] ;
+: ~~~		[ ~~LIT, ~~ ] ;
+: ~~~LIT,	[ ~~LIT, ~~LIT, ] ;
+: ~~~~		[ ~~~LIT, ~~~ ] ;
+: ~~~~LIT,	[ ~~~LIT, ~~~LIT, ] ;
+: ~~~~~		[ ~~~~LIT, ~~~~ ] ; \ etc.. Which is the last useful one?
+: ~~		[ ~LIT, ~ ] ;
+: ~~~		[ ~~LIT, ~LIT, ~ ] ;
+: ~~~~		[ ~~~LIT, ~~LIT, ~LIT, ~ ] ;
+: ~~~~~		[ ~~~~LIT, ~~~LIT, ~~LIT, ~LIT, ~ ] ;
+: ~~		[ LIT, LIT, ~ ] ;
+: ~~~		[ LIT, LIT, LIT, LIT, LIT, LIT, ~ ] ;
+: ~~		~ LIT, ~ LIT, ~ ~ ;
+: ~~~		~~ LIT, ~~ LIT, ~~ LIT, ~ ~ ;
+: ~~~~		~~~ LIT, ~~~ LIT, ~~~ LIT, ~~ LIT, ~ ~ ;
+\ number of LIT,s before word finally executed: 2^N - 1, where N is number of deferments.
+\                                   0, 1, 3,  7, 15, 31, 63 ...
+\ number of LIT,s before ~: 2^N - 2 -- 2, 6, 14, 30, 62 ...
 
 : RDUP		( r:n -- r:n r:n )	[ r@ >r ] ;
 : DUP		( n -- n n )		[ @r r> ] ;
@@ -65,9 +80,10 @@
 : JMPNZPL	( similar to CALL )	[ r@ (JMPNZP) >r RET ] ; \ preserv
 
 : TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;
+: HEREALLOT	( addr -- )		[ HERE SWAP ! ] ;
 : ifd{		( -- addr )		~~ NOT ~~ JMPNZ ~ TEMPALLOT ;
 : if{		( -- addr )		~~ DUP ~ ifd{ ;
-: }if		( addr -- )		[ HERE SWAP ! ] ;
+: }if		( addr -- )		~ HEREALLOT ;
 : }else{	( addr -- addr )	~ }if ~~ NOT ~ if{ ;
 : }elsed{	( addr -- addr )	~ }if ~~ NOT ~ ifd{ ;
 : infloop{	( -- addr )		~ HERE ;
@@ -86,15 +102,6 @@
 : ielse{	( n -- NOTn )		[ NOT iif{ ] ;
 : iifd{		( n -- )		[ iif{ DROP ] ;
 : ielsed{	( n -- )		[ ielse{ DROP ] ;
-
-DPTR @ >var DPTR_SAVED
-PPTR @ >var PPTR_SAVED
-: PTRSL		( addr addr -- )	[ @ SWAP ! ] ;
-: DPTRS		( -- )			[ DPTR_SAVED DPTR PTRSL ] ;
-: DPTRS		( -- )			[ DPTR @ DPTR_SAVED ! ] ;
-: PPTRS		( -- )			[ PPTR @ PPTR_SAVED ! ] ;
-: DPTRL		( -- )			[ DPTR_SAVED @ DPTR ! ] ;
-: PPTRL		( -- )			[ PPTR_SAVED @ PPTR ! ] ;
 
 0 BNOT value CELL_MAX
 CELL_MAX DUP 2 / - value SIGNED_MIN
@@ -121,7 +128,7 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 					[ 0 c, 1+ ] }loop ~ DROP ;
 : ~."		( - "text" - )		~~ JMP
 					[ TEMPALLOT aligned_,nh" SWAP ]
-					[ }if [LITERAL] ] ~~ n. ;
+					[ HEREALLOT [LITERAL] ] ~~ n. ;
 
 
 \ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ;
@@ -152,15 +159,23 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 					[char] * ~ c, }loop 
 					[ DROP 0 , PRINT: ] ;
 
-: DOES>		( addr -- )		~ [LITERAL] ~~ JMP
-					[ TEMPALLOT }if ; RDROP RET ] ;
+: LIT,,		[ LIT, LIT, ] GOTO LIT, ;
+: LIT,,,	[ LIT,, LIT, ] GOTO LIT,, ;
+: LIT,,,,	[ LIT,, LIT,, ] GOTO LIT,, ;
 
-\ need to write a DUMP word as soon as possible
+: (DOES>)	( addr -- )		~~~ JMP [ LIT, LIT, TEMPALLOT ]
+					[[ ; RET ]] ~ HEREALLOT ;
+: (DOES>)	( addr -- )		~~~ JMP ~~ LIT, ~ TEMPALLOT
+					~~ ; ~~ RET     ~ HEREALLOT ;
+: (DOES>)	( addr -- )		[ LIT, LIT, LIT, JMP ]
+					[ LIT, LIT,       TEMPALLOT ]
+					[ LIT, ; LIT, RET HEREALLOT ] ;
+: (DOES>)	( addr -- )		[ LIT,, JMP ~LIT, TEMPALLOT ]
+					[ LIT, ; LIT, RET HEREALLOT ] ;
+: DOES>		( addr -- )		~~ [LITERAL] ~ (DOES>) ;
 
-: 'XNAME	( - "word" - )		[ ' XNAME ] ;
+: 'XNAME	( - "word" - addr )	[ ' XNAME ] ;
 
-\ : actor"	( - "text" "name" - )	[ ,nh" DOES: HEAD XNAME DOES> ]
-\					[ n. n. ] ;
 
 : emit_xxd	( n -- )		[ 0x7f BAND DUP 0x20 <= ]
 					ifd{ ~ DROP [char] . }if
@@ -170,6 +185,7 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 						[ DUP c@ emit_xxd ]
 						[ 1+ 2DUP <> ]
 					}dod ~ 2DROP ;
+\ if making a general emit_range, may want an "UNLINK" word to remove the latest version of a named ("UNLINK emit_range", for example) word from the dictionary, to restore and previously existing version
 : >range	( a n -- a a )		[ OVER + ] ;
 : BL		( -- )			[ 0x20 emit ] ;
 : hex_xxd	( n -- )		[ DUP 16 / (x.) 15 BAND (x.) ] ; \ would be better with a right shift -- TODO: add shift primitives

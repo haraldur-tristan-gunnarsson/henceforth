@@ -427,15 +427,18 @@ NATIVE_CODE(head){
 static char word[0x100];
 
 NATIVE_CODE(bsw){//bsw: blank-separated word
-//TODO allow preceding whitespace
-	int in;
 	int word_index = 0;
 	static char word[0x100];
-	while(cin_native(),(in = (int)pop_data()) > ' '){
+	while(1){
+		cin_native();
+		int in = (int)pop_data();
+		if(in > ' '){//note that EOF (-1) is less than ' '
+			word[word_index] = (char)in;
+			word_index++;
+		}
+		else if(word_index)break;
+		if(word_index > 0xfe)error_exit("word length >254");
 		if(in == EOF)error_exit("cannot continue, EOF");
-		word[word_index] = (char)in;
-		word_index++;
-		if(word_index >= 0x100)error_exit("word length >=256");
 	}
 	word[word_index] = '\0';
 	push_data((size_t)word);
