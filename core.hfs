@@ -130,6 +130,12 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 					[ TEMPALLOT aligned_,nh" SWAP ]
 					[ HEREALLOT [LITERAL] ] ~~ n. ;
 
+: NIP		( n1 n2 -- n2 )		[ SWAP DROP ] ;
+: UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] \ xtn xt hd
+					loop{ [ 2DUP @ <> ] }loopd{
+					~ @ }loop \ xtn xt xtp
+					[ NIP ! ] ;
+: UNLINK	( - "name" - )		[ ' UNLINKXT ] ;
 
 \ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ;
 
@@ -185,7 +191,6 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 						[ DUP c@ emit_xxd ]
 						[ 1+ 2DUP <> ]
 					}dod ~ 2DROP ;
-\ if making a general emit_range, may want an "UNLINK" word to remove the latest version of a named ("UNLINK emit_range", for example) word from the dictionary, to restore and previously existing version
 : >range	( a n -- a a )		[ OVER + ] ;
 : BL		( -- )			[ 0x20 emit ] ;
 : hex_xxd	( n -- )		[ DUP 16 / (x.) 15 BAND (x.) ] ; \ would be better with a right shift -- TODO: add shift primitives
@@ -200,6 +205,7 @@ CELL_MAX DUP 2 / - value SIGNED_MIN
 					[ DUP CELL >range emit_range ]
 					[emit] | [ BL BL ]
 					[ @ NAME_OUT NL ] ;
+UNLINK emit_range \ there may be another, useful, emit_range smothered
 : align		( n n -- n )		[ 1- BNOT BAND ] ;
 : align_up	( n n -- n )		[ @r 1- + r> align ] ;
 : dump_range	( a a -- )		\ [ CELL align_up SWAP ] do{
