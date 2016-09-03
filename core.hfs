@@ -99,9 +99,9 @@
 : value		( n - "name" - )	[ : [LITERAL] ; ] ;
 : var		( - "name" - )		[ HERE CELL ALLOT value ] ;
 : >var		( n - "name" - )	[ HERE SWAP , value ] ;
+: iif{		( n -- n )		[ DUP iifd{ ] ;
 : ielse{	( n -- NOTn )		[ NOT iif{ ] ;
-: iifd{		( n -- )		[ iif{ DROP ] ;
-: ielsed{	( n -- )		[ ielse{ DROP ] ;
+: ielsed{	( n -- NOTn )		[ NOT iifd{ ] ;
 
 0 BNOT value CELL_MAX
 CELL_MAX DUP 2 / - value SIGNED_MIN

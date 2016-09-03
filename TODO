@@ -1,0 +1,18 @@
+backtrace: show_proc() plus "see"
+--> show_proc with name_out_native()
+
+fix dump on x86_64
+fix deletion_mark on x86_64
+iif{
+SKIPBL?
+(.) and .
+did iif{ based on [, how about EXEC based on [?
+mechanism for creating references --> INNER callable within language, directly.
+
+review CALL and INNER_INTERPRETER to see if there is a better way
+
+place macro definition into string, how?
+
+This code is POSIX-dependent and possibly Linux-dependent. If your kernel's virtual memory manager is not "lazy" in a similar manner to Linux's (which would probably be stupid, but what do I know?) then this program will claim a lot of your physical memory (about 1 part in 16, which is the amount of virtual memory claimed, usually); otherwise, just a few MiBs.
+
+No floating point support, as yet.
