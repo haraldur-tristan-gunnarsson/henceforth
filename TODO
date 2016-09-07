@@ -1,5 +1,5 @@
-backtrace: show_proc() plus "see"
---> show_proc with name_out_native()
+does C have a "typeof" operator, like "sizeof"?
+
 
 fix dump on x86_64
 fix deletion_mark on x86_64
@@ -8,6 +8,8 @@ SKIPBL?
 (.) and .
 did iif{ based on [, how about EXEC based on [?
 mechanism for creating references --> INNER callable within language, directly.
+add TRACE example to hello.hfs.
+"henceforth" stack-reordering word.
 
 review CALL and INNER_INTERPRETER to see if there is a better way
 

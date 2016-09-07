@@ -82,6 +82,7 @@ size_t *data_ptr = (size_t*)data_stack;
 const size_t proc_stack[STACK_SIZE];
 size_t *proc_ptr = (size_t*)proc_stack;
 size_t *inst_ptr = NULL;//Instruction pointer. Be very careful with code that touches it.
+size_t *c_stack_start = NULL;//To enable TRACE, need the memory range for the C stack.
 
 NATIVE_CODE(reset_stack){
 	data_ptr = (size_t*)data_stack;
@@ -497,13 +498,36 @@ NATIVE_CODE(xaddr){//( xt -- xaddr ) Get execution address of threaded code.
 	push_data((size_t)temp->code.threaded);
 } NATIVE_ENTRY(xaddr, "XADDR", quote);
 
+NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
+	size_t **ii;//Should be pointer to the same type as inst_ptr...
+	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
+	size_t *c_stack_end = (size_t*)&ii;//Needed for first word TRACED.
+	for(ii = (size_t**)proc_stack; ii < (size_t**)proc_ptr; ++ii){
+		size_t *past_inst_ptr = *ii - 1;//Should be the same type as inst_ptr.
+		//It would be nice if there were a syscall to tell whether a certain memory address was mapped for the calling process. Is there one? TODO.
+		//Need to test the C stack as the inner interpreter's first XT is on it.
+		//If neither in used part of code_spc nor in C stack (which grows down):
+		if((past_inst_ptr < code_spc	|| past_inst_ptr >= code_ptr)
+		&&( past_inst_ptr < c_stack_end	|| past_inst_ptr >= c_stack_start)){
+			printf("%zd ", (size_t)*ii);//Probably a value put on stack.
+			continue;//Otherwise, '*' would probably SEGFAULT.
+		}//Normally, the 'code space' is the right area for the inst_ptr.
+		struct entry *test = (struct entry*)(*past_inst_ptr);
+		struct entry *current = head;
+		for(;current && current != test; current = (struct entry*)current->next);
+		if(current && &null_entry != current)printf("%s ", current->name);
+		else printf("%zd ", (size_t)*ii);
+	}
+	puts("");
+} NATIVE_ENTRY(trace,"TRACE",xaddr);
+
 NATIVE_CODE(name_out){//( xt -- ) Print out the xt's name or, failing that, its value
 	struct entry *test = (struct entry*)pop_data();
 	struct entry *current = head;
 	for(; current && current != test; current = (struct entry*)current->next);//Try to find entry.
 	if(current && &null_entry != current)printf("%s", current->name);
 	else printf("%zd",(size_t)test);
-} NATIVE_ENTRY(name_out, "NAME_OUT", xaddr);
+} NATIVE_ENTRY(name_out, "NAME_OUT", trace);
 
 NATIVE_CODE(seext){//( xt -- ) Print out the xt's code length and token string (code).
 	struct entry *xt = (struct entry*)pop_data();
@@ -593,10 +617,10 @@ NATIVE_CODE(allot){//( n -- ) Allocate given amount of bytes of memory to 'code 
 } NATIVE_ENTRY(allot,"ALLOT",outer_interpreter);
 
 NATIVE_CODE(compile){//( xt -- )
-	here_native();//store code_ptr value on data stack	//HERE
-	push_data(sizeof(code_ptr));//cell_native();		//CELL
-	allot_native();//modifies code_ptr			//ALLOT
-	set_value_native();//store xt in stored addr from HERE	//! ( xt addr -- )
+	here_native();//store code_ptr value on data stack	//~ HERE
+	push_data(sizeof(code_ptr));//cell_native();		//~ CELL
+	allot_native();//modifies code_ptr			//~ ALLOT
+	set_value_native();//store xt in stored addr from HERE	//~ ! ( xt addr -- )
 } NATIVE_ENTRY(compile, ",", allot);
 
 NATIVE_CODE(cstrcmp){//( s1 s2 -- n ) Forthy interface for C's strcmp().
@@ -749,6 +773,7 @@ int main(int argc, char** argv){
 	if(MAP_FAILED == code_spc)error_exit("mmap failed for code_spc");
 	code_end = (size_t*)((size_t)code_spc + page_size);//Beware pointer size
 	code_ptr = code_spc;
+	c_stack_start = &phys_pages;
 
 	global_in = fopen("core.hfs", "r");//Set up core functions (words) from source...
 	outer_interpreter_native();//...
