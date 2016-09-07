@@ -376,6 +376,35 @@ THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 
 	(size_t)&ret_entry,
 }; THREADED_ENTRY(cell,"CELL",le);
 
+struct entry *head;//FORWARD DECLARATION
+
+NATIVE_CODE(head){//( -- &head )
+	push_data((size_t)&head);
+} NATIVE_ENTRY(head,"HEAD",cell);
+
+NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
+	size_t **ii;//Should be pointer to the same type as inst_ptr...
+	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
+	size_t *c_stack_end = (size_t*)&ii;//Needed for first word TRACED.
+	for(ii = (size_t**)proc_stack; ii < (size_t**)proc_ptr; ++ii){
+		size_t *past_inst_ptr = *ii - 1;//Should be the same type as inst_ptr.
+		//It would be nice if there were a syscall to tell whether a certain memory address was mapped for the calling process. Is there one? TODO.
+		//Need to test the C stack as the inner interpreter's first XT is on it.
+		//If neither in used part of code_spc nor in C stack (which grows down):
+		if((past_inst_ptr < code_spc	|| past_inst_ptr >= code_ptr)
+		&&( past_inst_ptr < c_stack_end	|| past_inst_ptr >= c_stack_start)){
+			printf("%zd ", (size_t)*ii);//Probably a value put on stack.
+			continue;//Otherwise, '*' would probably SEGFAULT.
+		}//Normally, the 'code space' is the right area for the inst_ptr.
+		struct entry *test = (struct entry*)(*past_inst_ptr);
+		struct entry *current = head;
+		for(;current && current != test; current = (struct entry*)current->next);
+		if(current && &null_entry != current)printf("%s ", current->name);
+		else printf("%zd ", (size_t)*ii);
+	}
+	puts("");
+} NATIVE_ENTRY(trace,"TRACE",head);
+
 NATIVE_CODE(call){// ( xt -- ) given execution token (xt, entry) execute its code
 	struct entry *xt = (struct entry *)pop_data();
 #ifdef DEBUG
@@ -389,7 +418,7 @@ NATIVE_CODE(call){// ( xt -- ) given execution token (xt, entry) execute its cod
 	else{//For native code:
 		xt->code.native();
 	}
-} NATIVE_ENTRY(call,"CALL",cell);
+} NATIVE_ENTRY(call,"CALL",trace);
 
 void inner_interpreter(void){//( &xt -- ) The CORE of the forth-like interpreter.
 	//This function executes strings of execution tokens (xt) i.e. 'threaded code'.
@@ -408,6 +437,7 @@ void inner_interpreter(void){//( &xt -- ) The CORE of the forth-like interpreter
 #ifdef DEBUG
 		printf("calling with inst_ptr: %p\n", inst_ptr);
 		show_proc_native();
+		trace_native();
 #endif
 		push_data(*(inst_ptr++));//Pushes 'struct entry *xt' then points to next.
 		call_native();
@@ -427,12 +457,6 @@ NATIVE_CODE(number){// ( char* -- n ) Converts a null-terminated string to an in
 	}
 } NATIVE_ENTRY(number,"#",call);
 
-struct entry *head;//FORWARD DECLARATION
-
-NATIVE_CODE(head){//( -- &head )
-	push_data((size_t)&head);
-} NATIVE_ENTRY(head,"HEAD",number);
-
 NATIVE_CODE(bsw){//( -- "word" ) BSW: blank-separated word, null-terminated.
 	int word_index = 0;
 	static char word[0x100];
@@ -449,7 +473,7 @@ NATIVE_CODE(bsw){//( -- "word" ) BSW: blank-separated word, null-terminated.
 	}
 	word[word_index] = '\0';
 	push_data((size_t)word);
-} NATIVE_ENTRY(bsw, "BSW", head);
+} NATIVE_ENTRY(bsw, "BSW", number);
 
 NATIVE_CODE(nprint){//( "string" -- ) print null-terminated string.
 	puts((char *)pop_data());
@@ -498,36 +522,13 @@ NATIVE_CODE(xaddr){//( xt -- xaddr ) Get execution address of threaded code.
 	push_data((size_t)temp->code.threaded);
 } NATIVE_ENTRY(xaddr, "XADDR", quote);
 
-NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
-	size_t **ii;//Should be pointer to the same type as inst_ptr...
-	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
-	size_t *c_stack_end = (size_t*)&ii;//Needed for first word TRACED.
-	for(ii = (size_t**)proc_stack; ii < (size_t**)proc_ptr; ++ii){
-		size_t *past_inst_ptr = *ii - 1;//Should be the same type as inst_ptr.
-		//It would be nice if there were a syscall to tell whether a certain memory address was mapped for the calling process. Is there one? TODO.
-		//Need to test the C stack as the inner interpreter's first XT is on it.
-		//If neither in used part of code_spc nor in C stack (which grows down):
-		if((past_inst_ptr < code_spc	|| past_inst_ptr >= code_ptr)
-		&&( past_inst_ptr < c_stack_end	|| past_inst_ptr >= c_stack_start)){
-			printf("%zd ", (size_t)*ii);//Probably a value put on stack.
-			continue;//Otherwise, '*' would probably SEGFAULT.
-		}//Normally, the 'code space' is the right area for the inst_ptr.
-		struct entry *test = (struct entry*)(*past_inst_ptr);
-		struct entry *current = head;
-		for(;current && current != test; current = (struct entry*)current->next);
-		if(current && &null_entry != current)printf("%s ", current->name);
-		else printf("%zd ", (size_t)*ii);
-	}
-	puts("");
-} NATIVE_ENTRY(trace,"TRACE",xaddr);
-
 NATIVE_CODE(name_out){//( xt -- ) Print out the xt's name or, failing that, its value
 	struct entry *test = (struct entry*)pop_data();
 	struct entry *current = head;
 	for(; current && current != test; current = (struct entry*)current->next);//Try to find entry.
 	if(current && &null_entry != current)printf("%s", current->name);
 	else printf("%zd",(size_t)test);
-} NATIVE_ENTRY(name_out, "NAME_OUT", trace);
+} NATIVE_ENTRY(name_out, "NAME_OUT", xaddr);
 
 NATIVE_CODE(seext){//( xt -- ) Print out the xt's code length and token string (code).
 	struct entry *xt = (struct entry*)pop_data();
