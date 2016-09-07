@@ -631,7 +631,7 @@ NATIVE_CODE(cstrcmp){//( s1 s2 -- n ) Forthy interface for C's strcmp().
 } NATIVE_ENTRY(cstrcmp, "CSTRCMP", compile);
 
 NATIVE_CODE(start_threaded_code){//Until delimiter ("]") is reached, record into threaded code the execution tokens of given words or (for numbers) LITERAL plus the value.
-						//HERE value delimiter char ] c, 0 c, : [
+							//,nh" }" value delimiter : iifd{
 	while(1){						//infloop{
 		bsw_native();					//~ BSW
 		push_data((size_t)read_data());			//~ DUP

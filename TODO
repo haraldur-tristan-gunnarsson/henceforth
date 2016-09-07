@@ -1,15 +1,16 @@
 does C have a "typeof" operator, like "sizeof"?
 
 
-fix dump on x86_64
 fix deletion_mark on x86_64
+align dictionary entries on size_t/CELL to make dumps more useful (NEXT would be made very clear)? would need to align after placing name as well (in semicolon).
 iif{
 SKIPBL?
 (.) and .
 did iif{ based on [, how about EXEC based on [?
-mechanism for creating references --> INNER callable within language, directly.
+mechanism for creating references (place on return stack with >r then use PROCPTR) --> INNER callable within language, directly.
 add TRACE example to hello.hfs.
 "henceforth" stack-reordering word.
+Add "TO" word that modifies existing dictionary entries to point to new code.
 
 review CALL and INNER_INTERPRETER to see if there is a better way
 
