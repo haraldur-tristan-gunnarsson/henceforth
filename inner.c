@@ -159,6 +159,65 @@ size_t pop_proc(void){//Pop value from return stack.
 }
 size_t read_proc(void){return *(proc_ptr - 1);}
 
+
+#define VARIABLE(CNAME,NAME,NEXT) NATIVE_CODE(CNAME){ \
+	push_data((size_t)(&(CNAME))); \
+} NATIVE_ENTRY(CNAME,NAME,NEXT);//( -- system_variable ) Read 'var @'. Write 'val var !'.
+
+#define BINARY_OP(CNAME,OP,NAME,NEXT) NATIVE_CODE(CNAME){ \
+	size_t val2 = pop_data(); \
+	size_t val1 = pop_data(); \
+	push_data(val1 OP val2); \
+} NATIVE_ENTRY(CNAME,NAME,NEXT);//( n1 n2 -- n1OPn2 ) For C-derived binary op primitives.
+
+NATIVE_CODE(not){//( n -- notn )
+	push_data(pop_data() ? 0 : ~0);// ~0 (-1) is TRUE, 0 is FALSE
+} NATIVE_ENTRY(not, "NOT", show_proc);
+
+#define BOOLEAN_OP(CNAME,OP,NAME,NEXT) NATIVE_CODE(CNAME){ \
+	size_t val2 = pop_data(); \
+	size_t val1 = pop_data(); \
+	push_data(val1 OP val2); \
+	not_native(); \
+	not_native(); \
+} NATIVE_ENTRY(CNAME,NAME,NEXT);//( n1 n2 -- n1OPn2 ) For C-derived boolean operations.
+//Note that, in C, TRUE is 1, while I want TRUE to be ~0 (-1); hence NOT NOT at the end.
+
+BOOLEAN_OP(eq,  =,  "=",  not);
+BOOLEAN_OP(neq, !=, "<>", eq);
+BOOLEAN_OP(gt,  >,  ">",  neq);//Unsigned...
+BOOLEAN_OP(lt,  <,  "<",  gt);//...
+BOOLEAN_OP(ge,  >=, ">=", lt);//...
+BOOLEAN_OP(le,  <=, "<=", ge);//...
+
+//Binary operators for language:
+BINARY_OP(mul,  *,  "*",    le);
+BINARY_OP(div,  /,  "/",    mul);
+BINARY_OP(mod,  %,  "%",    div);
+BINARY_OP(sub,  -,  "-",    mod);
+BINARY_OP(add,  +,  "+",    sub);
+BINARY_OP(shl,  <<, "<<",   add);//Logical, add arithmetic shift later...
+BINARY_OP(shr,  >>, ">>",   shl);//...
+BINARY_OP(bor,  |,  "BOR",  shr);
+BINARY_OP(band, &,  "BAND", bor);
+
+NATIVE_CODE(bnot){//( n -- ~n )
+	push_data(~pop_data());
+} NATIVE_ENTRY(bnot,"BNOT",band);
+
+struct entry *head;//FORWARD DECLARATION
+//System variables, to be used (with caution) inside forth-like code:
+VARIABLE(head,     "HEAD", bnot);
+VARIABLE(code_ptr, "CPTR", head);//In addition to HERE, for modification.
+VARIABLE(code_end, "CEND", code_ptr);
+VARIABLE(data_ptr, "DPTR", code_end);
+VARIABLE(proc_ptr, "PPTR", data_ptr);
+
+NATIVE_CODE(pagesize){//( -- page_size )
+	push_data(page_size);
+} NATIVE_ENTRY(pagesize,"PAGESIZE",proc_ptr);//CONSTANT macro, like HERE, CELL?
+
+
 NATIVE_CODE(ret){//Return from called word to calling (virtual) word
 #ifdef DEBUG
 	show_data_native();
@@ -170,31 +229,15 @@ NATIVE_CODE(ret){//Return from called word to calling (virtual) word
 #ifdef DEBUG
 	printf("inst_ptr: %p\n", inst_ptr);
 #endif
-} NATIVE_ENTRY(ret,"RET",show_proc);
+} NATIVE_ENTRY(ret,"RET",pagesize);
 
 NATIVE_CODE(cin){//( - c - ) Get next character from input stream.
 	push_data((size_t)getc(global_in));
 } NATIVE_ENTRY(cin,"CIN",ret);
 
-NATIVE_CODE(pagesize){//( -- page_size )
-	push_data(page_size);
-} NATIVE_ENTRY(pagesize,"PAGESIZE",cin);//CONSTANT macro, like HERE, CELL?
-
-#define VARIABLE(CNAME,NAME,NEXT) NATIVE_CODE(CNAME){ \
-	push_data((size_t)(&(CNAME))); \
-} NATIVE_ENTRY(CNAME,NAME,NEXT);//( -- system_variable ) Read 'var @'. Write 'val var !'.
-
-struct entry *head;//FORWARD DECLARATION
-//System variables, to be used (with caution) inside forth-like code:
-VARIABLE(head,     "HEAD", pagesize);
-VARIABLE(code_ptr, "CPTR", head    );//In addition to HERE, for modification.
-VARIABLE(code_end, "CEND", code_ptr);
-VARIABLE(data_ptr, "DPTR", code_end);
-VARIABLE(proc_ptr, "PPTR", data_ptr);
-
 NATIVE_CODE(at){//( addr -- n ) A size_t pointer dereference for top value on data stack.
 	push_data(*((size_t *)pop_data()));
-} NATIVE_ENTRY(at,"@",proc_ptr);
+} NATIVE_ENTRY(at,"@",cin);
 
 NATIVE_CODE(set_value){//( n addr -- ) Set size_t pointed to by the top data stack item.
 	size_t *ref = (size_t *)pop_data();
@@ -289,64 +332,11 @@ NATIVE_CODE(newline){
 	putchar('\n');
 } NATIVE_ENTRY(newline,"NL",emit);
 
-#define BINARY_OP(CNAME,OP,NAME,NEXT) NATIVE_CODE(CNAME){ \
-	size_t val2 = pop_data(); \
-	size_t val1 = pop_data(); \
-	push_data(val1 OP val2); \
-} NATIVE_ENTRY(CNAME,NAME,NEXT);//( n1 n2 -- n1OPn2 ) For C-derived binary op primitives.
-
-//Binary operators for language:
-BINARY_OP(mul,  *,  "*",    newline);
-BINARY_OP(div,  /,  "/",    mul);
-BINARY_OP(mod,  %,  "%",    div);
-BINARY_OP(sub,  -,  "-",    mod);
-BINARY_OP(add,  +,  "+",    sub);
-BINARY_OP(shl,  <<, "<<",   add);//Logical, add arithmetic shift later...
-BINARY_OP(shr,  >>, ">>",   shl);//...
-BINARY_OP(bor,  |,  "BOR",  shr);
-BINARY_OP(band, &,  "BAND", bor);
-
-NATIVE_CODE(not){//( n -- notn )
-	push_data(pop_data() ? 0 : ~0);// ~0 (-1) is TRUE, 0 is FALSE
-} NATIVE_ENTRY(not, "NOT", band);
-
-NATIVE_CODE(bnot){//( n -- ~n )
-	push_data(~pop_data());
-} NATIVE_ENTRY(bnot,"BNOT",not);
-
-NATIVE_CODE(gt){//( n1 n2 -- n1>n2)
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1<=val2);
-	not_native();//In C, TRUE is 1, while I want TRUE to be ~0 (-1)
-} NATIVE_ENTRY(gt,">",bnot);
-
-NATIVE_CODE(lt){//( n1 n2 -- n1<n2)
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1>=val2);
-	not_native();//In C, TRUE is 1, while I want TRUE to be ~0 (-1)
-} NATIVE_ENTRY(lt,"<",gt);
-
-NATIVE_CODE(ge){//( n1 n2 -- n1>=n2)
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1<val2);
-	not_native();//In C, TRUE is 1, while I want TRUE to be ~0 (-1)
-} NATIVE_ENTRY(ge,">=",lt);
-
-NATIVE_CODE(le){//( n1 n2 -- n1<=n2)
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1>val2);
-	not_native();//In C, TRUE is 1, while I want TRUE to be ~0 (-1)
-} NATIVE_ENTRY(le,"<=",ge);
-
 THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 'code'
 	(size_t)&literal_entry,
 	sizeof data_ptr,
 	(size_t)&ret_entry,
-}; THREADED_ENTRY(cell,"CELL",le);
+}; THREADED_ENTRY(cell,"CELL",newline);
 
 NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
 	size_t **ii;//Should be pointer to the same type as inst_ptr...
