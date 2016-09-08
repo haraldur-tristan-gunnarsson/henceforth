@@ -5,7 +5,7 @@ rlwrap
 
 fix deletion_mark on x86_64 -- difficult to reproduce error.
 align dictionary entries on size_t/CELL to make dumps more useful (NEXT would be made very clear)? would need to align after placing name as well (in semicolon).
-iif{
+ifnd{ and ifn{ ( equivalent to ~ NOT ifd{ etc.) comes up a lot, so would be helpful if they existed (plus a little more efficient as JMPNZ rather than NOT NOT JMPNZ).
 SKIPBL? Would require some rearrangement of core.hfs (c, earlier etc.) and slight changes to ( and iifd{.
 (.) and .
 did iif{ based on [, how about EXEC based on [?

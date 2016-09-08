@@ -21,6 +21,7 @@
 ( as should this )
 
 : see		( -- )			[ ' seext ] ;
+: NL		( -- )			[ 0x0a emit ] ; \ '\n' in C, see ASCII table
 : x.		( n -- )		[ (x.) NL ] ;
 : [emit]	( - c - )		~ [char] ~~ emit ;
 : (0x.)		( n -- )		[emit] 0 [emit] x ~ (x.) ;
@@ -99,9 +100,6 @@
 : value		( n - "name" - )	[ : [LITERAL] ; ] ;
 : var		( - "name" - )		[ HERE CELL ALLOT value ] ;
 : >var		( n - "name" - )	[ HERE SWAP , value ] ;
-: iif{		( n -- n )		[ DUP iifd{ ] ;
-: ielse{	( n -- NOTn )		[ NOT iif{ ] ;
-: ielsed{	( n -- NOTn )		[ NOT iifd{ ] ;
 
 0 BNOT value CELL_MAX			\ 1111...
 CELL_MAX DUP 2 / - value SIGNED_MIN	\ 1000...
@@ -112,6 +110,23 @@ CELL_MAX DUP 2 / - value SIGNED_MIN	\ 1000...
 : ,n"		( - "text" - )		[ ," 0 c, ] ;
 : ,nh"		( - "text" - addr )	[ HERE ,n" ] ;
 : ,h"		( - "text" - addr len )	[ HERE ," DUP HERE SWAP - ] ;
+
+: NIP		( n1 n2 -- n2 )		[ SWAP DROP ] ;
+: UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] \ xtn xt hd
+					loop{ [ 2DUP @ <> ] }loopd{
+					~ @ }loop \ xtn xt xtp
+					[ NIP ! ] ;
+: UNLINK	( - "name" - )		[ ' UNLINKXT ] ;
+
+,nh" }" value delimiter
+: iifd{		( n -- )		~ NOT ifd{ [ delimiter c@ SKIPBL RET ] }if ( -- )
+					infloop{ [ BSW DUP delimiter CSTRCMP ]
+						~ NOT ifd{ [ DROP RET ] }if
+					~ EXEC }infloop ;
+UNLINK delimiter
+: ielsed{	( n -- )		[ NOT iifd{ ] ;
+: iif{		( n -- n )		[ DUP iifd{ ] ;
+: ielse{	( n -- NOTn )		[ NOT iif{ ] ;
 
 : TRIM		( addr -- )		[ DUP CPTR ! CEND @ PAGESIZE - <= ]
 					ifd{ [ HERE M_SET_END ] }if
@@ -128,13 +143,6 @@ CELL_MAX DUP 2 / - value SIGNED_MIN	\ 1000...
 					[ TEMPALLOT aligned_,nh" SWAP ]
 					[ HEREALLOT [LITERAL] ] ~~ n. ;
 
-: NIP		( n1 n2 -- n2 )		[ SWAP DROP ] ;
-: UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] \ xtn xt hd
-					loop{ [ 2DUP @ <> ] }loopd{
-					~ @ }loop \ xtn xt xtp
-					[ NIP ! ] ;
-: UNLINK	( - "name" - )		[ ' UNLINKXT ] ;
-
 \ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ;
 
 
@@ -145,6 +153,7 @@ CELL_MAX DUP 2 / - value SIGNED_MIN	\ 1000...
 					if{ [ LIT, LIT, , ] }elsed{
 					[ LIT, LIT, LIT, LIT ]
 					[ LIT, LIT, # , ] }if GOTO [[ ;
+UNLINK DELIM
 \ : ]] ;	\ instead of ANSI FORTH's >DOES
 
 

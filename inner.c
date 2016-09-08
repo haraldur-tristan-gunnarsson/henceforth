@@ -187,8 +187,8 @@ NATIVE_CODE(not){//( n -- notn )
 } NATIVE_ENTRY(CNAME,NAME,NEXT);//( n1 n2 -- n1OPn2 ) For C-derived boolean operations.
 //Note that, in C, TRUE is 1, while I want TRUE to be ~0 (-1); hence NOT NOT at the end.
 
-BOOLEAN_OP(eq,  =,  "=",  not);
-BOOLEAN_OP(neq, !=, "<>", eq);
+BOOLEAN_OP(eq,  =,  "=",  not);// : = [ - NOT ] ;
+BOOLEAN_OP(neq, !=, "<>", eq);// : <> [ - NOT NOT ] ;
 BOOLEAN_OP(gt,  >,  ">",  neq);//Unsigned...
 BOOLEAN_OP(lt,  <,  "<",  gt);//...
 BOOLEAN_OP(ge,  >=, ">=", lt);//...
@@ -354,10 +354,6 @@ NATIVE_CODE(emit){//( c -- )
 	putchar((char)pop_data());
 } NATIVE_ENTRY(emit, "emit", hexprint);
 
-NATIVE_CODE(newline){
-	putchar('\n');
-} NATIVE_ENTRY(newline,"NL",emit);
-
 NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
 	size_t **ii;//Should be pointer to the same type as inst_ptr...
 	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
@@ -379,7 +375,7 @@ NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugg
 		else printf("%zd ", (size_t)*ii);
 	}
 	puts("");
-} NATIVE_ENTRY(trace,"TRACE",newline);
+} NATIVE_ENTRY(trace,"TRACE",emit);
 
 NATIVE_CODE(call){// ( xt -- ) given execution token (xt, entry) execute its code
 	struct entry *xt = (struct entry *)pop_data();
@@ -720,28 +716,7 @@ NATIVE_CODE(line_comment){
 	}
 } NATIVE_ENTRY(line_comment, "\\", skip_bl);
 
-NATIVE_CODE(interactive_if){//Interactive/immediate if. Like CPP #if.
-	static const char delimiter = '}';		//,nh" }" value delimiter : iifd{
-	if(!pop_data()){//No execution:			//if{ ~ DROP
-		push_data((size_t)delimiter);		//~ delimiter ~ c@
-		skip_bl_native();			//~ SKIPBL
-	}
-	else{//Execution:				//}elsed{
-		while(1){				//infloop{
-			bsw_native();			//~ BSW
-			push_data((size_t)read_data());	//~ DUP
-			push_data((size_t)"}");		//~ delimiter
-			cstrcmp_native();		//~ CSTRCMP ( "word" n )
-			if(!pop_data()){		//~ NOT ifd{
-				(void)pop_data();	//~ DROP
-				break;			//~ RET
-			}				//}if
-			exec_native();			//~ EXEC
-		}					//}infloop
-	}						//}if ;
-} NATIVE_ENTRY(interactive_if, "iifd{", line_comment);	//: iif{ ~ DUP ~ iifd{ ;
-
-struct entry *head = (struct entry*)&interactive_if_entry;
+struct entry *head = (struct entry*)&line_comment_entry;
 
 int main(int argc, char** argv){
 	//Setting up MMAP for main threaded-code memory area:
