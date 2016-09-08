@@ -215,3 +215,8 @@ UNLINK emit_range \ there may be another, useful, emit_range smothered
 : dump		( a n -- )		[ >range dump_range ] ;
 
 \ how to find out width of terminal (number of columns) for nice output?
+
+: IDEBUG	( -- )			[ GLOBAL_INPUT @ STDIN GLOBAL_INPUT ! ] ( addr )
+					~." Entered INTERACTIVE DEBUGGING MODE!"
+					~." Press CTRL-D (EOF) to continue execution."
+					[ OUTER_INTERPRETER GLOBAL_INPUT ! ] ;

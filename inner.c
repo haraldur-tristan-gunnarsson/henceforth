@@ -85,9 +85,13 @@ size_t *proc_ptr = (size_t*)proc_stack;
 size_t *inst_ptr = NULL;//Instruction pointer. Be very careful with code that touches it.
 size_t *c_stack_start = NULL;//To enable TRACE, need the memory range for the C stack.
 
+NATIVE_CODE(exit){
+	exit(0);
+} NATIVE_ENTRY(exit,"exit",null);
+
 NATIVE_CODE(reset_stack){
 	data_ptr = (size_t*)data_stack;
-} NATIVE_ENTRY(reset_stack,"reset_stack",null);
+} NATIVE_ENTRY(reset_stack,"reset_stack",exit);
 
 NATIVE_CODE(align_code){//can be used to make dumps easier to read
 	size_t aligner = sizeof(size_t) - 1 ;
@@ -213,11 +217,11 @@ VARIABLE(code_ptr, "CPTR", head);//In addition to HERE, for modification.
 VARIABLE(code_end, "CEND", code_ptr);
 VARIABLE(data_ptr, "DPTR", code_end);
 VARIABLE(proc_ptr, "PPTR", data_ptr);
+VARIABLE(global_in, "GLOBAL_INPUT", proc_ptr);
 
-NATIVE_CODE(pagesize){//( -- page_size )
-	push_data(page_size);
-} NATIVE_ENTRY(pagesize,"PAGESIZE",proc_ptr);//CONSTANT macro, like HERE, CELL?
-
+NATIVE_CODE(literal){//Get next code value and skip it. Needed for numerical constants.
+	push_data(*inst_ptr++);//( -- n )
+} NATIVE_ENTRY(literal,"LITERAL",global_in);
 
 NATIVE_CODE(ret){//Return from called word to calling (virtual) word
 #ifdef DEBUG
@@ -230,11 +234,36 @@ NATIVE_CODE(ret){//Return from called word to calling (virtual) word
 #ifdef DEBUG
 	printf("inst_ptr: %p\n", inst_ptr);
 #endif
-} NATIVE_ENTRY(ret,"RET",pagesize);
+} NATIVE_ENTRY(ret,"RET",literal);
+
+THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 'code'
+	(size_t)&literal_entry,
+	sizeof data_ptr,
+	(size_t)&ret_entry,
+}; THREADED_ENTRY(cell,"CELL",ret);
+
+//THREADED_CODE(stdin) = {//( -- n ) gives size of both items on the stacks and in 'code'
+//	(size_t)&literal_entry,
+//	(size_t)stdin,//
+//	(size_t)&ret_entry,
+//}; THREADED_ENTRY(stdin,"STDIN",cell);
+//inner.c:243:2: error: initializer element is not constant
+//  (size_t)stdin,
+//  ^
+//Eh? TODO: look this up when internet is reconnected. stdin is not a constant?
+
+NATIVE_CODE(stdin){//( -- page_size )
+	push_data((size_t)stdin);
+} NATIVE_ENTRY(stdin,"STDIN",cell);//CONSTANT macro, like HERE, CELL?
+
+NATIVE_CODE(pagesize){//( -- page_size )
+	push_data(page_size);
+} NATIVE_ENTRY(pagesize,"PAGESIZE",stdin);//CONSTANT macro, like HERE, CELL?
+
 
 NATIVE_CODE(cin){//( - c - ) Get next character from input stream.
 	push_data((size_t)getc(global_in));
-} NATIVE_ENTRY(cin,"CIN",ret);
+} NATIVE_ENTRY(cin,"CIN",pagesize);
 
 NATIVE_CODE(at){//( addr -- n ) A size_t pointer dereference for top value on data stack.
 	push_data(*((size_t *)pop_data()));
@@ -256,10 +285,6 @@ NATIVE_CODE(char_set_value){//( n addr -- ) Like !/set_value, but for a single c
 	*ref = val;
 } NATIVE_ENTRY(char_set_value,"c!",char_at);
 
-NATIVE_CODE(literal){//Get next code value and skip it. Needed for numerical constants.
-	push_data(*inst_ptr++);//( -- n )
-} NATIVE_ENTRY(literal,"LITERAL",char_set_value);
-
 NATIVE_CODE(m_set_end){//( addr -- ) Handles virtual memory for the 'code space'.
 	size_t addr = pop_data();	//10110111	initial address (example)
 	size_t temp = page_size - 1;	//00001111	for tiny (16 byte) page size
@@ -279,7 +304,7 @@ NATIVE_CODE(m_set_end){//( addr -- ) Handles virtual memory for the 'code space'
 	if(MAP_FAILED == res)error_exit("mremap failed for m_set_end (first time)");
 	res = mremap(code_spc, trimmed_size, code_spc_max, 0);
 	if(MAP_FAILED == res)error_exit("mremap failed for m_set_end (second time)");
-} NATIVE_ENTRY(m_set_end,"M_SET_END",literal);
+} NATIVE_ENTRY(m_set_end,"M_SET_END",char_set_value);
 
 NATIVE_CODE(drop){//( n -- )
 	(void)pop_data();
@@ -333,12 +358,6 @@ NATIVE_CODE(newline){
 	putchar('\n');
 } NATIVE_ENTRY(newline,"NL",emit);
 
-THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 'code'
-	(size_t)&literal_entry,
-	sizeof data_ptr,
-	(size_t)&ret_entry,
-}; THREADED_ENTRY(cell,"CELL",newline);
-
 NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
 	size_t **ii;//Should be pointer to the same type as inst_ptr...
 	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
@@ -360,7 +379,7 @@ NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugg
 		else printf("%zd ", (size_t)*ii);
 	}
 	puts("");
-} NATIVE_ENTRY(trace,"TRACE",cell);
+} NATIVE_ENTRY(trace,"TRACE",newline);
 
 NATIVE_CODE(call){// ( xt -- ) given execution token (xt, entry) execute its code
 	struct entry *xt = (struct entry *)pop_data();
@@ -667,6 +686,16 @@ NATIVE_CODE(semicolon){//Make all currently temporary dictionary entries permane
 } NATIVE_ENTRY(semicolon, ";", colon);
 
 NATIVE_CODE(skip_bl){//( c -- ) Given delimiter, skip input to space-delimited delimiter.
+//	//Version using a string:
+//	while(1){				//infloop{
+//		push_data((size_t)read_data());	//~ DUP
+//		bsw_native();			//~ BSW
+//		cstrcmp_native();		//~ CSTRCMP ( "delimiter" n )
+//		if(!pop_data()){		//~ NOT ifd{
+//			(void)pop_data();	//~ DROP
+//			break;			//~ RET
+//		}				//}if
+//	}					//}infloop
 	const char delimiter = (char)pop_data();
 	int in;
 	int word_index = 0;
@@ -692,13 +721,12 @@ NATIVE_CODE(line_comment){
 } NATIVE_ENTRY(line_comment, "\\", skip_bl);
 
 NATIVE_CODE(interactive_if){//Interactive/immediate if. Like CPP #if.
-							//,nh" }" value delimiter : iifd{
-	static const char delimiter = '}';
-	if(!pop_data()){//Execution:			//if{
+	static const char delimiter = '}';		//,nh" }" value delimiter : iifd{
+	if(!pop_data()){//No execution:			//if{ ~ DROP
 		push_data((size_t)delimiter);		//~ delimiter ~ c@
 		skip_bl_native();			//~ SKIPBL
 	}
-	else{//No execution:				//}elsed{
+	else{//Execution:				//}elsed{
 		while(1){				//infloop{
 			bsw_native();			//~ BSW
 			push_data((size_t)read_data());	//~ DUP
