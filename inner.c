@@ -1,4 +1,5 @@
 //A forth-like language lacking immediate words.
+//Metacomment: ( a1 a2 - "word" - n ) means: takes address 2 and THEN address 1 from the data stack, takes a "word" from the input stream and then places an integer on the data stack.'r:' indicates the return stack, c indicates a character or byte, b usually indicates a boolean and so on.
 
 #define _GNU_SOURCE 0xF00BAA //value unimportant, required for mremap
 #include <stdio.h>
@@ -177,23 +178,19 @@ NATIVE_CODE(cin){//( - c - ) Get next character from input stream.
 
 NATIVE_CODE(pagesize){//( -- page_size )
 	push_data(page_size);
-} NATIVE_ENTRY(pagesize,"PAGESIZE",cin);
+} NATIVE_ENTRY(pagesize,"PAGESIZE",cin);//CONSTANT macro, like HERE, CELL?
 
-NATIVE_CODE(code_ptr){//( -- code_ptr ) Read with 'CPTR @' and write with 'value CPTR !'
-	push_data((size_t)(&code_ptr));
-} NATIVE_ENTRY(code_ptr,"CPTR",pagesize);
+#define VARIABLE(CNAME,NAME,NEXT) NATIVE_CODE(CNAME){ \
+	push_data((size_t)(&(CNAME))); \
+} NATIVE_ENTRY(CNAME,NAME,NEXT);//( -- system_variable ) Read 'var @'. Write 'val var !'.
 
-NATIVE_CODE(code_end){//( -- code_end )
-	push_data((size_t)(&code_end));
-} NATIVE_ENTRY(code_end,"CEND",code_ptr);
-
-NATIVE_CODE(data_ptr){//( -- data_ptr )
-	push_data((size_t)(&data_ptr));
-} NATIVE_ENTRY(data_ptr,"DPTR",code_end);
-
-NATIVE_CODE(proc_ptr){//( -- proc_ptr )
-	push_data((size_t)(&proc_ptr));
-} NATIVE_ENTRY(proc_ptr,"PPTR",data_ptr);
+struct entry *head;//FORWARD DECLARATION
+//System variables, to be used (with caution) inside forth-like code:
+VARIABLE(head,     "HEAD", pagesize);
+VARIABLE(code_ptr, "CPTR", head    );//In addition to HERE, for modification.
+VARIABLE(code_end, "CEND", code_ptr);
+VARIABLE(data_ptr, "DPTR", code_end);
+VARIABLE(proc_ptr, "PPTR", data_ptr);
 
 NATIVE_CODE(at){//( addr -- n ) A size_t pointer dereference for top value on data stack.
 	push_data(*((size_t *)pop_data()));
@@ -376,12 +373,6 @@ THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 
 	(size_t)&ret_entry,
 }; THREADED_ENTRY(cell,"CELL",le);
 
-struct entry *head;//FORWARD DECLARATION
-
-NATIVE_CODE(head){//( -- &head )
-	push_data((size_t)&head);
-} NATIVE_ENTRY(head,"HEAD",cell);
-
 NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugging.
 	size_t **ii;//Should be pointer to the same type as inst_ptr...
 	printf("trace: ");//...as the proc_stack is often a string of inst_ptr values.
@@ -403,7 +394,7 @@ NATIVE_CODE(trace){//Display contents of return stack as 'word' names for debugg
 		else printf("%zd ", (size_t)*ii);
 	}
 	puts("");
-} NATIVE_ENTRY(trace,"TRACE",head);
+} NATIVE_ENTRY(trace,"TRACE",cell);
 
 NATIVE_CODE(call){// ( xt -- ) given execution token (xt, entry) execute its code
 	struct entry *xt = (struct entry *)pop_data();
