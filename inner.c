@@ -199,7 +199,8 @@ BINARY_OP(add,  +,  "+",    sub);
 BINARY_OP(shl,  <<, "<<",   add);//Logical, add arithmetic shift later...
 BINARY_OP(shr,  >>, ">>",   shl);//...
 BINARY_OP(bor,  |,  "BOR",  shr);
-BINARY_OP(band, &,  "BAND", bor);
+BINARY_OP(bxor, ^,  "BXOR", bor);
+BINARY_OP(band, &,  "BAND", bxor);
 
 NATIVE_CODE(bnot){//( n -- ~n )
 	push_data(~pop_data());
