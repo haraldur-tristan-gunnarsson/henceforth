@@ -289,62 +289,37 @@ NATIVE_CODE(newline){
 	putchar('\n');
 } NATIVE_ENTRY(newline,"NL",emit);
 
-NATIVE_CODE(mul){//( n1 n2 -- n1*n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1*val2);
-} NATIVE_ENTRY(mul,"*",newline);
+#define BINARY_OP(CNAME,OP,NAME,NEXT) NATIVE_CODE(CNAME){ \
+	size_t val2 = pop_data(); \
+	size_t val1 = pop_data(); \
+	push_data(val1 OP val2); \
+} NATIVE_ENTRY(CNAME,NAME,NEXT);//( n1 n2 -- n1OPn2 ) For C-derived binary op primitives.
 
-NATIVE_CODE(div){//( n1 n2 -- n1/n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1/val2);
-} NATIVE_ENTRY(div,"/",mul);
-
-NATIVE_CODE(mod){//( n1 n2 -- n1%n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1%val2);
-} NATIVE_ENTRY(mod,"%",div);
-
-NATIVE_CODE(sub){//( n1 n2 -- n1-n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1-val2);
-} NATIVE_ENTRY(sub,"-",mod);
-
-NATIVE_CODE(add){//( n1 n2 -- n1+n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1+val2);
-} NATIVE_ENTRY(add,"+",sub);
+//Binary operators for language:
+BINARY_OP(mul,  *,  "*",    newline);
+BINARY_OP(div,  /,  "/",    mul);
+BINARY_OP(mod,  %,  "%",    div);
+BINARY_OP(sub,  -,  "-",    mod);
+BINARY_OP(add,  +,  "+",    sub);
+BINARY_OP(shl,  <<, "<<",   add);//Logical, add arithmetic shift later...
+BINARY_OP(shr,  >>, ">>",   shl);//...
+BINARY_OP(bor,  |,  "BOR",  shr);
+BINARY_OP(band, &,  "BAND", bor);
 
 NATIVE_CODE(not){//( n -- notn )
 	push_data(pop_data() ? 0 : ~0);// ~0 (-1) is TRUE, 0 is FALSE
-} NATIVE_ENTRY(not, "NOT", add);
+} NATIVE_ENTRY(not, "NOT", band);
 
 NATIVE_CODE(bnot){//( n -- ~n )
 	push_data(~pop_data());
 } NATIVE_ENTRY(bnot,"BNOT",not);
-
-NATIVE_CODE(bor){//( n1 n2 -- n1|n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1|val2);
-} NATIVE_ENTRY(bor,"BOR",bnot);
-
-NATIVE_CODE(band){//( n1 n2 -- n1&n2 )
-	size_t val2 = pop_data();
-	size_t val1 = pop_data();
-	push_data(val1&val2);
-} NATIVE_ENTRY(band,"BAND",bor);
 
 NATIVE_CODE(gt){//( n1 n2 -- n1>n2)
 	size_t val2 = pop_data();
 	size_t val1 = pop_data();
 	push_data(val1<=val2);
 	not_native();//In C, TRUE is 1, while I want TRUE to be ~0 (-1)
-} NATIVE_ENTRY(gt,">",band);
+} NATIVE_ENTRY(gt,">",bnot);
 
 NATIVE_CODE(lt){//( n1 n2 -- n1<n2)
 	size_t val2 = pop_data();
