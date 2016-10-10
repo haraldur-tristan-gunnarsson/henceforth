@@ -71,7 +71,7 @@ size_t *code_end = NULL;//Pointer to current end of memory available to code_ptr
 size_t code_spc_max = 0;//Maximum size of region pointed (in)to by code_spc and code_ptr
 size_t page_size = 0;
 #define TEMP_ENTRY_MAX (0x20)
-const struct entry temp_entry_store[TEMP_ENTRY_MAX];//Separate, limited dictionary used by colon (:) and semicolon (;) in order to (perhaps foolishly) provide internal labels and unstructured code facility within 'words'
+const struct entry temp_entry_store[TEMP_ENTRY_MAX];//Separate, limited dictionary used by colon (:) and semicolon (;) in order to (perhaps foolishly) provide internal labels and unstructured code facility within 'words'. Unfortunately, if makes recursion very awkward.
 struct entry *temp_entry_ptr = (struct entry*)temp_entry_store;
 struct entry *temp_entry_head = NULL;
 #define TEMP_ENTRY_NAME_LENGTH_MAX 0x100
@@ -342,13 +342,13 @@ NATIVE_CODE(here){// ( -- addr ) CPTR @
 	at_native();
 } NATIVE_ENTRY(here,"HERE",r_to_s_copy);
 
-NATIVE_CODE(dot){//( n -- )
-	printf("%zd\n",pop_data());
-} NATIVE_ENTRY(dot,".",here);
+NATIVE_CODE(decprint){//( n -- )
+	printf("%zd",pop_data());
+} NATIVE_ENTRY(decprint,"(.)",here);
 
 NATIVE_CODE(hexprint){//( n -- )
 	printf("%zx",pop_data());
-} NATIVE_ENTRY(hexprint,"(x.)",dot);
+} NATIVE_ENTRY(hexprint,"(x.)",decprint);
 
 NATIVE_CODE(emit){//( c -- )
 	putchar((char)pop_data());

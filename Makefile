@@ -9,7 +9,11 @@ CFLAGS = --std=gnu89 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
 #CFLAGS = --std=c11 $(WARNINGS) -g#-Werror -O2# -O2 -Og #-O0
 LIBS = -lm
 
-all: inner.elf
+all: inner.elf test
+
+#./inner.elf test.hfs # Ha!
+test: inner.elf test.hfs
+	./$^
 
 inner.elf: inner.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
@@ -23,4 +27,4 @@ clean:
 
 rebuild: clean all
 
-.PHONY: all clean rebuild
+.PHONY: all clean rebuild test

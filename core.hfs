@@ -1,4 +1,5 @@
-\ this should be a comment
+\ Comments: \ until newline \n and, later, ( until ) (space delimited).
+\ So many methods to choose from -- oh, dear!
 : ~		' ' , ' , , ;
 : ~LIT		[ LITERAL LITERAL , ] ;
 : ~,		[ LITERAL , , ] ;
@@ -22,6 +23,7 @@
 
 : see		( -- )			[ ' seext ] ;
 : NL		( -- )			[ 0x0a emit ] ; \ '\n' in C, see ASCII table
+: .		( -- )			[ (.) NL ] ;
 : x.		( n -- )		[ (x.) NL ] ;
 : [emit]	( - c - )		~ [char] ~~ emit ;
 : (0x.)		( n -- )		[emit] 0 [emit] x ~ (x.) ;
@@ -64,6 +66,7 @@
 : TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
 : BOOL		( n -- bool )		[ NOT NOT ] ;
 
+
 : 'XADDR	( - "name" - addr )	[ ' XADDR ] ;
 : JMP					[ r> @ >r RET ] ; \ jump no link
 : JMPL		( similar to CALL )	[ r@ @ (SKIPCELL) >r RET ] ; \ jump with link
@@ -79,6 +82,9 @@
 : (JMPNZP)	( n raddr -- n addr )	[ >r DUP r> (JMPNZ) ] ;
 : JMPNZP	( n -- n )		[ r> (JMPNZP) >r RET ] ; \ preserv
 : JMPNZPL	( similar to CALL )	[ r@ (JMPNZP) >r RET ] ; \ preserv
+: (JMPZ)	( n raddr -- addr )	[ >r DUP NOT ] \ bool nbool
+					[ r@ @ BAND SWAP ] \ new? nbool
+					[ r> CELL+ BAND + ] ; \ addr
 
 : TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;
 : HEREALLOT	( addr -- )		[ HERE SWAP ! ] ;

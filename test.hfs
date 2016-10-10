@@ -1,0 +1,53 @@
+\ This source file is meant to test the core words of this forth-like language to highlight any regressions.
+
+\ Testing immediate control flow:
+0 iifd{ ." ERROR: 'iifd' executed on null." }
+1 1 iifd{ DROP 0 0 } iifd{ ." ERROR: If the following is 1, 'iifd' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
+0 iif{ ." ERROR: 'iif' executed on null." } DROP
+1 iif{ DROP 0 } iif{ ." ERROR: If the following is 1, 'iif' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
+0 iif{ ." ERROR: 'iif' executed on null." } DUP ielsed{ DROP 1 1 } NOT iifd{ ." ERROR: If the following is 1, 'ielsed' executed on 1, else 'ielsed' failed to execute on null:" DUP NOT . } DROP
+0 iif{ ." ERROR: 'iif' executed on null." } ielse{ DROP 1 } NOT iif{ ." ERROR: If the following is 0, 'iif' executed on 0, else 'ielse' failed to execute on null:" DUP NOT . } DROP
+
+\ Testing 'UNLINK', 'value', 'TRIM', deletion_mark and dictionary order:
+HERE deletion_mark test_marker
+HERE value trimmer
+1 value unlink_test
+unlink_test 1- iifd{ ." ERROR: 'value' failed to store 1." }
+0 value unlink_test
+: unlink_test2 [ unlink_test ] ;
+unlink_test iifd{ ." ERROR: failed to shadow 'value' 1 with 'value' 0." }
+UNLINK unlink_test
+unlink_test 1- iifd{ ." ERROR: 'UNLINK' failed to unshadow initial 'value' of 1." }
+UNLINK unlink_test
+unlink_test2 iifd{ ." ERROR: use of 'UNLINK' clobbered threaded code." }
+trimmer DUP TRIM HERE - iifd{ ." ERROR: 'TRIM' not working properly." }
+test_marker HERE - iifd{ ." ERROR: 'deletion_mark' not working properly." }
+
+\ Testing various system (dictionary etc.) words:
+deletion_mark test_marker
+: test [ NOT ] ;
+1 test iifd{ ." ERROR: new word duplicating 'NOT' not working properly." }
+,nh" test" 'XNAME test CSTRCMP iifd{ ." ERROR: ''XNAME' not working properly." }
+1 'XNAME test EXEC iifd{ ." ERROR: 'EXEC' not executing new word." }
+1 ' test CALL iifd{ ." ERROR: use of ''' then 'CALL' not working properly." }
+\ test 'XNAME
+test_marker
+
+\ Testing 'align' etc.:
+0x4567 0x10000 align iifd{ ." ERROR: used 'align' on a number smaller than its aligner and did not get 0." }
+0x4567 0x10000 TUCK align_up - iifd{ ." ERROR: used 'aliga_up' on a number with aligner 0x10000 and did not get 0x10000." }
+0x4567 0x10000 TUCK >range - + iifd{ ." ERROR: used '>range' and did not get correct result." }
+
+\ Stack manipulation tests:
+\ how to do reset_stack etc.?
+0 1 1 2DROP iifd{ ." ERROR: '2DROP' failed." } reset_stack
+
+\ test 'dump' with a character string, also dump_range and dump_cell and perhaps the words that they use
+\ How best to test words that produce much output?
+
+
+
+\ How best to test 'IDEBUG' and other words that require action from the user?
+
+\ This should be the last test:
+exit ." If this sentence is visible, then the word 'exit' has FAILED."

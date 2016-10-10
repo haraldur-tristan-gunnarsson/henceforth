@@ -1,22 +1,24 @@
 does C have a "typeof" operator, like "sizeof"?
 
-
-rlwrap
+Write shell scrip that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script.
 
 fix deletion_mark on x86_64 -- difficult to reproduce error.
 align dictionary entries on size_t/CELL to make dumps more useful (NEXT would be made very clear)? would need to align after placing name as well (in semicolon).
 ifnd{ and ifn{ ( equivalent to ~ NOT ifd{ etc.) comes up a lot, so would be helpful if they existed (plus a little more efficient as JMPNZ rather than NOT NOT JMPNZ).
+}ifr, to stand for '~ RET }if'
 SKIPBL? Would require some rearrangement of core.hfs (c, earlier etc.) and slight changes to ( and iifd{.
-(.) and .
-did iif{ based on [, how about EXEC based on [?
+Add "TO" word that modifies existing dictionary entries to point to new code.
 mechanism for creating references (place on return stack with >r then use PROCPTR) --> INNER callable within language, directly.
 add TRACE example to hello.hfs.
 "henceforth" stack-reordering word.
-Add "TO" word that modifies existing dictionary entries to point to new code.
+did iif{ based on [, how about EXEC based on [?
 
 review CALL and INNER_INTERPRETER to see if there is a better way
 
 place macro definition into string, how?
+
+if the temp_entry dictionary was removed (so also hampering unstructured coding), then recursion would be much easier to do. This would work:
+: RECURSE       ( --)                  [ HEAD @ , ] ;
 
 This code is POSIX-dependent and possibly Linux-dependent. If your kernel's virtual memory manager is not "lazy" in a similar manner to Linux's (which would probably be stupid, but what do I know?) then this program will claim a lot of your physical memory (about 1 part in 16, which is the amount of virtual memory claimed, usually); otherwise, just a few MiBs.
 
