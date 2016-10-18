@@ -1,10 +1,18 @@
-\ This source file is meant to test the core words of this forth-like language to highlight any regressions.
+\ ." ERROR: Line comments ('\') not working properly."
+( ." ERROR: Block comments ('(' and ')') not working properly." )
+
+\ This source file is meant to test the core words of this forth-like language to highlight some possible regressions or platform incompatibilities/porting problems.
+\ Ideally, all the words tested here should be considered part of the core language. At least, all words that return a value should be tested here, as well as some words that can be used to define words that return values.
+
+\ TODO: 'DOES:', '[[', 'aligned_,nh"' (treat characters as numbers), ',h"', ',nh"', ',n"', ',"', 'c,', '>var', 'var', 'value', various control flow words, 'ALIGN_CODE', '@', '!', 'c@', 'c!', 'RDUP', 'RDROP', return stack manipulations, '#', 'ALLOT', ',', 'CSTRCMP',
+\ Perhaps some words are so fundamental that they cannot be fruitfully tested, as everything else would fail? Like 'LITERAL'/'LIT' (???), 'RET', ':', '[', ';',
+\ Adding all the BINARY_OPs and BOOLEANOPs from inner.c would be really dull...
 
 \ Testing immediate control flow:
-0 iifd{ ." ERROR: 'iifd' executed on null." }
-1 1 iifd{ DROP 0 0 } iifd{ ." ERROR: If the following is 1, 'iifd' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
-0 iif{ ." ERROR: 'iif' executed on null." } DROP
-1 iif{ DROP 0 } iif{ ." ERROR: If the following is 1, 'iif' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
+0				iifd{	." ERROR: 'iifd' executed on null." }
+0				iif{	." ERROR: 'iif' executed on null." } DROP
+1 1	iifd{	DROP 0 0 }	iifd{	." ERROR: If the following is 1, 'iifd' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
+1	iif{	DROP 0 }	iif{	." ERROR: If the following is 1, 'iif' failed to execute on 1, else 'iifd' executed on null:" DUP . } DROP
 0 iif{ ." ERROR: 'iif' executed on null." } DUP ielsed{ DROP 1 1 } NOT iifd{ ." ERROR: If the following is 1, 'ielsed' executed on 1, else 'ielsed' failed to execute on null:" DUP NOT . } DROP
 0 iif{ ." ERROR: 'iif' executed on null." } ielse{ DROP 1 } NOT iif{ ." ERROR: If the following is 0, 'iif' executed on 0, else 'ielse' failed to execute on null:" DUP NOT . } DROP
 
@@ -12,35 +20,84 @@
 HERE deletion_mark test_marker
 HERE value trimmer
 1 value unlink_test
-unlink_test 1- iifd{ ." ERROR: 'value' failed to store 1." }
+unlink_test 1-				iifd{ ." ERROR: 'value' failed to store 1." }
 0 value unlink_test
 : unlink_test2 [ unlink_test ] ;
-unlink_test iifd{ ." ERROR: failed to shadow 'value' 1 with 'value' 0." }
-UNLINK unlink_test
-unlink_test 1- iifd{ ." ERROR: 'UNLINK' failed to unshadow initial 'value' of 1." }
-UNLINK unlink_test
-unlink_test2 iifd{ ." ERROR: use of 'UNLINK' clobbered threaded code." }
-trimmer DUP TRIM HERE - iifd{ ." ERROR: 'TRIM' not working properly." }
-test_marker HERE - iifd{ ." ERROR: 'deletion_mark' not working properly." }
+unlink_test				iifd{ ." ERROR: failed to shadow 'value' 1 with 'value' 0." }
+' unlink_test UNLINKXT unlink_test 1-	iifd{ ." ERROR: 'UNLINKXT' failed to unshadow initial 'value' of 1." }
+UNLINK unlink_test unlink_test2		iifd{ ." ERROR: use of 'UNLINK' clobbered threaded code." }
+trimmer DUP TRIM HERE -			iifd{ ." ERROR: 'TRIM' not working properly." }
+test_marker HERE -			iifd{ ." ERROR: 'deletion_mark' not working properly." }
 
 \ Testing various system (dictionary etc.) words:
 deletion_mark test_marker
 : test [ NOT ] ;
-1 test iifd{ ." ERROR: new word duplicating 'NOT' not working properly." }
-,nh" test" 'XNAME test CSTRCMP iifd{ ." ERROR: ''XNAME' not working properly." }
-1 'XNAME test EXEC iifd{ ." ERROR: 'EXEC' not executing new word." }
-1 ' test CALL iifd{ ." ERROR: use of ''' then 'CALL' not working properly." }
-\ test 'XNAME
+1 test												iifd{ ." ERROR: new word duplicating 'NOT' not working properly." }
+,nh" test" 'XNAME test CSTRCMP									iifd{ ." ERROR: ''XNAME' not working properly." }
+,nh" test" ' test XNAME CSTRCMP									iifd{ ." ERROR: 'XNAME' not working properly." }
+1 'XNAME test EXEC										iifd{ ." ERROR: 'EXEC' not executing new word." }
+1 ' test CALL											iifd{ ." ERROR: use of ''' then 'CALL' not working properly." }
+: ~test ~ + ;	5 4 ~test 9 <>									iifd{ ." ERROR: '~' not working properly." }
+: ~~test ~~ NOT ;	: ~~|~test ~~test ;	1 ~~|~test					iifd{ ." ERROR: '~~' not working properly." }
+: ~~~test ~~~ NOT ;	: ~~~|~~test ~~~test ;	: ~~~|~~|~test ~~~|~~test ;	1 ~~~|~~|~test	iifd{ ." ERROR: '~~~' not working properly." }
+: LITtest 4 [LITERAL] 5 [LITERAL] ~ + ;	LITtest 9 <>						iifd{ ." ERROR: '[LITERAL]' not working properly." }
+: ~LITtest ~LIT 5 , ~LIT 4 , ~ + ;	~LITtest 9 <>						iifd{ ." ERROR: '~LIT' not working properly." }
 test_marker
 
 \ Testing 'align' etc.:
-0x4567 0x10000 align iifd{ ." ERROR: used 'align' on a number smaller than its aligner and did not get 0." }
-0x4567 0x10000 TUCK align_up - iifd{ ." ERROR: used 'aliga_up' on a number with aligner 0x10000 and did not get 0x10000." }
-0x4567 0x10000 TUCK >range - + iifd{ ." ERROR: used '>range' and did not get correct result." }
+0x4567 0x10000 align		iifd{ ." ERROR: used 'align' on a number smaller than its aligner and did not get 0." }
+0x4567 0x10000 TUCK align_up -	iifd{ ." ERROR: used 'align_up' on a number with aligner 0x10000 and did not get 0x10000." }
+0x4567 0x10000 TUCK >range - +	iifd{ ." ERROR: used '>range' and did not get correct result." }
 
 \ Stack manipulation tests:
 \ how to do reset_stack etc.?
-0 1 1 2DROP iifd{ ." ERROR: '2DROP' failed." } reset_stack
+0 1 DROP		iifd{ ." ERROR: 'DROP' failed." } reset_stack
+0 1 1 2DROP		iifd{ ." ERROR: '2DROP' failed." } reset_stack
+1 2 3 NIP + 4 <>	iifd{ ." ERROR: 'NIP' failed." } reset_stack
+0 1 2 OVER + + 4 <>	iifd{ ." ERROR: 'OVER' failed." } reset_stack
+0 1 DUP + 2 <>		iifd{ ." ERROR: 'DUP' failed." } reset_stack
+0 0 1 1 2DUP + + 3 <>	iifd{ ." ERROR: '2DUP' failed." } reset_stack
+3 5 SWAP - 2 <>		iifd{ ." ERROR: 'SWAP' failed." } reset_stack
+3 5 TUCK + + 13 <>	iifd{ ." ERROR: 'TUCK' failed." } reset_stack
+
+\  Misc.
+deletion_mark mark
+: chartest [char] h ;	char H chartest - char A char a - <>	iifd{ ." ERROR: Either 'char' or '[char]' malfunctioning." }
+CELL CELL+ CELL+ CELL - 2 CELLS <>				iifd{ ." ERROR: CELL words malfunctioning." }
+1 1+ 1+ 1- 2 <>							iifd{ ." ERROR: incrementers and decrementers malfunctioning." }
+1 1 BOOL +							iifd{ ." ERROR: 'BOOL' conversion to standard 'true' (-1, bitwise inverse of 0) failed. }
+1 NOT								iifd{ ." ERROR: 'NOT' failed." }
+-1 BNOT								iifd{ ." ERROR: 'BNOT' failed." }
+0 NOT 0 BNOT <>							iifd{ ." ERROR: the standard TRUTH value must be the same as '0 BNOT'. }
+mark
+
+\ Test 'DOES>' feature (analogous to ANSI FORTH 'DOES>'):
+deletion_mark test_marker
+: val2 ~ : DOES> ~ @ ; \ worse than 'value'
+HERE 2 , val2 TWO
+HERE 6 , val2 SIX
+TWO 2 <> SIX 6 <> BOR		iifd{ ." ERROR: incorrect dereference from 'DOES>'." }
+: value ~ : DOES> ; \ should behave identically to the standard 'value'
+4 value FOUR
+5 value FIVE
+FOUR 4 <> FIVE 5 <> BOR		iifd{ ." ERROR: incorrect value from 'DOES>'." }
+: add_five ~ : DOES> [ 5 + ] ;
+4 add_five 4+5
+6 add_five 6+5
+4+5 9 <> 6+5 11 <> BOR		iifd{ ." ERROR: incorrect addition from 'DOES>'." }
+: variable [ HERE CELL ALLOT : ] DOES> ; \ same behaviour as standard 'var'
+variable TEMP
+22 TEMP !
+TEMP @ 22 <>			iifd{ ." ERROR: malfunctioning 'variable' using 'DOES>'." }
+test_marker
+
+\ Testing some constants:
+\ Assuming two's complement... cannot be bothered to consider whether and how other systems behave differently.
+SIGNED_MIN 1 <<				iifd{ ." ERROR: 'SIGNED_MIN' logically shifted left should be 0." }
+SIGNED_MIN CELL_MAX + CELL_MAX 1 >> <>	iifd{ ." ERROR: 'SIGNED_MIN' and 'CELL_MAX' off." }
+SIGNED_MAX SIGNED_MIN + CELL_MAX <>	iifd{ ." ERROR: 'SIGNED_MIN' plus 'SIGNED_MAX' should have the same bit pattern as the unsigned maximum, in two's complement." }
+
+\ should 'LIT,,', 'LIT,,,' etc. be tested, and so considered part of the "official" language?
 
 \ test 'dump' with a character string, also dump_range and dump_cell and perhaps the words that they use
 \ How best to test words that produce much output?
