@@ -1,5 +1,5 @@
 //A forth-like language lacking immediate words.
-//Metacomment: ( a1 a2 - "word" - n ) means: takes address 2 and THEN address 1 from the data stack, takes a "word" from the input stream and then places an integer on the data stack.'r:' indicates the return stack, c indicates a character or byte, b usually indicates a boolean and so on.
+//Metacomment: ( a1 a2 - "word" - n ) means: takes address 2 and THEN address 1 from the data stack, takes a "word" from the input stream and then places an integer on the data stack. 'r:' indicates the return stack, c indicates a character or byte, b usually indicates a boolean and so on.
 
 #define _GNU_SOURCE 0xF00BAA //value unimportant, required for mremap
 #include <stdio.h>
@@ -242,16 +242,6 @@ THREADED_CODE(cell) = {//( -- n ) gives size of both items on the stacks and in 
 	(size_t)&ret_entry,
 }; THREADED_ENTRY(cell,"CELL",ret);
 
-//THREADED_CODE(stdin) = {//( -- n ) gives size of both items on the stacks and in 'code'
-//	(size_t)&literal_entry,
-//	(size_t)stdin,//
-//	(size_t)&ret_entry,
-//}; THREADED_ENTRY(stdin,"STDIN",cell);
-//inner.c:243:2: error: initializer element is not constant
-//  (size_t)stdin,
-//  ^
-//Eh? TODO: look this up when internet is reconnected. stdin is not a constant?
-
 NATIVE_CODE(stdin){//( -- page_size )
 	push_data((size_t)stdin);
 } NATIVE_ENTRY(stdin,"STDIN",cell);//CONSTANT macro, like HERE, CELL?
@@ -448,8 +438,8 @@ NATIVE_CODE(bsw){//( -- "word" ) BSW: blank-separated word, null-terminated.
 } NATIVE_ENTRY(bsw, "BSW", number);
 
 NATIVE_CODE(nprint){//( "string" -- ) print null-terminated string.
-	puts((char *)pop_data());
-} NATIVE_ENTRY(nprint, "n.", bsw);
+	fputs((char *)pop_data(), stdout);
+} NATIVE_ENTRY(nprint, "(n.)", bsw);
 
 NATIVE_CODE(wordsearch){//( "word" -- xt ) Find (latest, most recent) xt for given word.
 	char *word = (char *) pop_data();

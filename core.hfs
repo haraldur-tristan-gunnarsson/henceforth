@@ -1,11 +1,22 @@
-\ Comments: \ until newline \n and, later, ( until ) (space delimited).
-\ So many methods to choose from -- oh, dear!
-: ~		' ' , ' , , ;
-: ~LIT		[ LITERAL LITERAL , ] ;
-: ~,		[ LITERAL , , ] ;
-: [LITERAL]	[ ~LIT , ] ;
-: '[LITERAL]	[ ' [LITERAL] ] ;
+\ Comments: \ until newline \n and, later, ( until ) (space delimited). The block comment ('(' and ')') will be defined in this file from more primitive words.
+\ Metacomment: ( a1 a2 - "word" - n ) means: takes address 2 and THEN address 1 from the data stack, takes a "word" from the input stream and then places an integer on the data stack. 'r:' indicates the return stack, c indicates a character or byte, b usually indicates a boolean and so on.
+
+\ Incrementers and decrementers, plus conversion from bytes to cells/machine-words.
+: CELLS 	[ CELL * ] ;	\ n -- n
+: CELL-		[ CELL - ] ;	\ n -- n
+: CELL+ 	[ CELL + ] ;	\ n -- n
+: 1+		[ 1 + ] ;   	\ n -- n
+: 1-		[ 1 - ] ;   	\ n -- n
+
+\ Defining how to create threaded code without '[' and ']':
+: ~		' ' , ' , , ;		\ Thread one word. In theory, could produce '[' and ']' with '~', but the resulting code would be harder to read until '[' and ']' were defined.
+: ~LIT		[ LITERAL LITERAL , ] ;	\ Thread the word 'LITERAL', used for numerical constants in-code.
+: [LITERAL]	[ ~LIT , ] ;		\ Take a value from the stack and place it in threaded code after a 'LITERAL', so that threaded code can then operate on that value.
+: '[LITERAL]	[ ' [LITERAL] ] ;	\ Could be used for placing the execution token (dictionary entry address) of a word into threaded code.
+
+\ So many methods to choose from -- oh, dear! '~~' is for deferred threading, '~~~' for doubly deferred threading, etc..
 : ~~ 		[ '[LITERAL] LITERAL , , ] ;
+: ~,		[ LITERAL , , ] ;
 : ~~		[ ' ~LIT , ~, ] ;
 : ~~~		[ ' ~LIT ~LIT ~, ~LIT , ~, ~LIT ~, ~, ] ;
 : ~~		~ ' ~ LITERAL ~ LITERAL ~ , ~ , ~ LITERAL ~ , ~ , ;
@@ -16,36 +27,19 @@
 : ~~~		~ ' ~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ , ~~ , ~~ LITERAL ~~ , ~~ , ;
 : ~~		~ LITERAL ~ LITERAL ~ , ~ ~ ~ LITERAL ~ , ~ , ;
 : ~~~		~~ LITERAL ~~ LITERAL ~~ , ~~ LITERAL ~ ~ ~~ , ~~ LITERAL ~~ , ~~ , ;
-: char					[ BSW c@ ] ;
-: [char]				[ char [LITERAL] ] ;
-: (					[char] ) ~ SKIPBL ;
-( as should this )
 
-: see		( -- )			[ ' seext ] ;
-: NL		( -- )			[ 0x0a emit ] ; \ '\n' in C, see ASCII table
-: .		( -- )			[ (.) NL ] ;
-: x.		( n -- )		[ (x.) NL ] ;
-: [emit]	( - c - )		~ [char] ~~ emit ;
-: (0x.)		( n -- )		[emit] 0 [emit] x ~ (x.) ;
-: 0x.		( n -- )		[ (0x.) NL ] ;
-
-: CELLS 	( n -- n )		[ CELL * ] ;
-: CELL-		( n -- n )		[ CELL - ] ;
-: CELL+ 	( n -- n )		[ CELL + ] ;
-: 1+		( n -- n )		[ 1 + ] ;
-: 1-		( n -- n )		[ 1 - ] ;
-
-: (SKIPCELL)	[ r> r> CELL+ >r >r ] ;
-: LIT		[ r@ @ (SKIPCELL) ] ;
-: LIT,		[ r@ @ , (SKIPCELL) ] ;
-: ~LIT,		[ LIT, LIT, ] ;
+\ Still more methods to do the same thing...
+: (SKIPCELL)	[ r> r> CELL+ >r >r ] ;		\ When called, this causes the following word, that would be called afterwards, to be skipped, going to the next one.
+: LIT		[ r@ @ (SKIPCELL) ] ;		\ Effectively a reimplementation of LITERAL. LITERAL needs to be implemented as a native word as it is used in other native words.
+: LIT,		[ r@ @ , (SKIPCELL) ] ;		\ Like 'LITERAL'/'LIT', except that the value is placed at 'HERE', rather than put on the stack.
+: ~LIT,		[ LIT, LIT, ] ;			\ Thread the word 'LIT,', used for threading words.
 : ~~		[ ~LIT, ~ ] ;
 : ~~LIT,	[ ~LIT, ~LIT, ] ;
 : ~~~		[ ~~LIT, ~~ ] ;
 : ~~~LIT,	[ ~~LIT, ~~LIT, ] ;
 : ~~~~		[ ~~~LIT, ~~~ ] ;
 : ~~~~LIT,	[ ~~~LIT, ~~~LIT, ] ;
-: ~~~~~		[ ~~~~LIT, ~~~~ ] ; \ etc.. Which is the last useful one?
+: ~~~~~		[ ~~~~LIT, ~~~~ ] ;		\ etc.. Which is the last useful one?
 : ~~		[ ~LIT, ~ ] ;
 : ~~~		[ ~~LIT, ~LIT, ~ ] ;
 : ~~~~		[ ~~~LIT, ~~LIT, ~LIT, ~ ] ;
@@ -59,179 +53,194 @@
 \                                   0, 1, 3,  7, 15, 31, 63 ...
 \ number of LIT,s before ~: 2^N - 2 -- 2, 6, 14, 30, 62 ...
 
+: char					[ BSW c@ ] ;		\ Take the next whitespace-delimited word and place the first character on the data stack.
+: [char]				[ char [LITERAL] ] ;	\ Place a LITERAL at HERE and then the value of the following character.
+: (					[char] ) ~ SKIPBL ;	( This is a block comment, newly possible. )
+
+: BOOL		( n -- bool )		[ NOT NOT ] ;	\ Turns a 0 to 0 (useless), but turns any non-zero to the bitwise inverse of zero (usually -1), the standard 'true' (useful).
+: see		( - "word" - )		[ ' seext ] ;	\ Display the words that make up the word following see (i.e. 'see BLAH' shows words that make up 'BLAH').
+: 'XNAME	( - "word" - addr )	[ ' XNAME ] ;	\ ''XNAME WORDS' will give the address of the string 'WORDS', assuming the word exists.
+
+\ Words for printing to standard output (placed this early in case they are needed for debugging words in this file):
+: BL		( -- )			[ 0x20 emit ] ;			\ Output a space/blank, see ASCII table.
+: NL		( -- )			[ 0x0a emit ] ;			\ '\n' in C, see ASCII table.
+: .		( -- )			[ (.) NL ] ;			\ Pop off and print value on top of stack, in base 10, plus a newline.
+: x.		( n -- )		[ (x.) NL ] ;			\ Pop off and print value on top of stack, in base 16, plus a newline.
+: [emit]	( - c - )		~ [char] ~~ emit ;		\ Causes the following character to be emitted, when executing code being threaded at HERE.
+: (0x.)		( n -- )		[emit] 0 [emit] x ~ (x.) ;	\ Pop off and print value on top of stack, in base 16, following '0x', without a newline.
+: 0x.		( n -- )		[ (0x.) NL ] ;			\ Pop off and print value on top of stack, in base 16, following '0x', plus a newline.
+: n.		( addr -- )		[ (n.) NL ] ;			\ Print null-terminated string from address with a trailing newline.
+
+\ Non-primitive (return) stack manipulators -- function usually inferrable from stack state comments (in parentheses):
 : RDUP		( r:n -- r:n r:n )	[ r@ >r ] ;
 : DUP		( n -- n n )		[ @r r> ] ;
 : OVER		( n1 n2 -- n1 n2 n1 )	[ >r DUP r> SWAP ] ;
 : 2DUP		( n1n2 -- n1n2 n1n2 )	[ OVER OVER ] ;
 : TUCK		( n1 n2 -- n2 n1 n2 )	[ SWAP OVER ] ;
-: BOOL		( n -- bool )		[ NOT NOT ] ;
-
-
-: 'XADDR	( - "name" - addr )	[ ' XADDR ] ;
-: JMP					[ r> @ >r RET ] ; \ jump no link
-: JMPL		( similar to CALL )	[ r@ @ (SKIPCELL) >r RET ] ; \ jump with link
-: ~JMP,		( addr -- )		~~ JMP ~ , ;
-: GOTO		( - "name" - )		[ 'XADDR ~JMP, ] ;
-: ~JMPL,	( addr -- )		~~ JMPL ~ , ;
-: GOSUB		( addr -- )		[ 'XADDR ~JMPL, ] ;
-: (JMPNZ)	( n raddr -- addr )	[ >r NOT DUP NOT ] \ nbool bool
-					[ r@ @ BAND SWAP ] \ new? nbool
-					[ r> CELL+ BAND + ] ; \ addr
-: JMPNZ		( n -- )		[ r> (JMPNZ) >r RET ] ;
-: JMPNZL	( similar to CALL )	[ r@ (JMPNZ) >r RET ] ;
-: (JMPNZP)	( n raddr -- n addr )	[ >r DUP r> (JMPNZ) ] ;
-: JMPNZP	( n -- n )		[ r> (JMPNZP) >r RET ] ; \ preserv
-: JMPNZPL	( similar to CALL )	[ r@ (JMPNZP) >r RET ] ; \ preserv
-: (JMPZ)	( n raddr -- addr )	[ >r DUP NOT ] \ bool nbool
-					[ r@ @ BAND SWAP ] \ new? nbool
-					[ r> CELL+ BAND + ] ; \ addr
-
-: TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;
-: HEREALLOT	( addr -- )		[ HERE SWAP ! ] ;
-: ifd{		( -- addr )		~~ NOT ~~ JMPNZ ~ TEMPALLOT ;
-: if{		( -- addr )		~~ DUP ~ ifd{ ;
-: }if		( addr -- )		~ HEREALLOT ;
-: }else{	( addr -- addr )	~ }if ~~ NOT ~ if{ ;
-: }elsed{	( addr -- addr )	~ }if ~~ NOT ~ ifd{ ;
-: infloop{	( -- addr )		~ HERE ;
-: }infloop	( addr -- )		~ ~JMP, ;
-: loop{		( -- addr )		~ HERE ;
-: }loop{	( -- addr )		~ if{ ;
-: }loopd{	( -- addr )		~ ifd{ ;
-: }loop		( addr addr -- )	[ SWAP ~JMP, }if ] ;
-: do{		( -- addr )		~ HERE ;
-: }dod		( addr -- )		~~ JMPNZ ~ , ; \ [ LIT, JMPNZ , ]
-: }do		( addr -- )		~~ DUP ~ }dod ;
-
-: value		( n - "name" - )	[ : [LITERAL] ; ] ;
-: var		( - "name" - )		[ HERE CELL ALLOT value ] ;
-: >var		( n - "name" - )	[ HERE SWAP , value ] ;
-
-0 BNOT value CELL_MAX			\ 1111...
-CELL_MAX DUP 2 / - value SIGNED_MIN	\ 1000...
-
-: c,		( c -- )		[ HERE 1 ALLOT c! ] ;
-: ,"		( - "text" - )		loop{ [ CIN DUP ] [char] " ~ <>
-					}loopd{ ~ c, }loop ~ DROP ;
-: ,n"		( - "text" - )		[ ," 0 c, ] ;
-: ,nh"		( - "text" - addr )	[ HERE ,n" ] ;
-: ,h"		( - "text" - addr len )	[ HERE ," DUP HERE SWAP - ] ;
-
 : NIP		( n1 n2 -- n2 )		[ SWAP DROP ] ;
-: UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] \ xtn xt hd
-					loop{ [ 2DUP @ <> ] }loopd{
-					~ @ }loop \ xtn xt xtp
-					[ NIP ! ] ;
-: UNLINK	( - "name" - )		[ ' UNLINKXT ] ;
+: 2DROP		( n n -- )		[ DROP DROP ] ;
 
+
+\ Creating low-level control flow words as non-primitives, from other words (primitive and not):
+: JMP					[ r> @ >r RET ] ;		\ Jump to address in cell following this one (i.e. the calling cell).
+: JMPL					[ r@ @ (SKIPCELL) >r RET ] ;	\ Jump to address in cell following this one (i.e. the calling cell), with next cell address on return stack.
+: ~JMP,		( addr -- )		~~ JMP ~ , ;			\ Take address from data stack and place it after the address of the 'JMP' word.
+: ~JMPL,	( addr -- )		~~ JMPL ~ , ;			\ Take address from data stack and place it after the address of the 'JMPL' word.
+: 'XADDR	( - "name" - addr )	[ ' XADDR ] ;			\ Gives the address of the start of threaded code for the following word -- the eXecution ADDRess.
+: GOTO		( - "name" - )		[ 'XADDR ~JMP, ] ;		\ From new code, will directly jump to start of threaded code of the word given.
+: GOSUB		( addr -- )		[ 'XADDR ~JMPL, ] ;		\ From new code, will jump to start of threaded code of the word given, with next cell address on return stack.
+: (JMPNZ)	( n r> -- addr skip? )	[ >r NOT DUP NOT r> @ BAND SWAP ] ; \ '0 NOT'== 0 BNOT'	\ Decide whether to jump or to skip the next cell, and get address to jump to.
+: JMPNZ		( n -- )		[ r@ (JMPNZ) r> CELL+ BAND + >r RET ] ;			\ Jump on non-zero, otherwise skip the next cell.
+: JMPNZL	( n -- )		[ r@ (JMPNZ) r> CELL+ @r BAND + >r RET ] ;		\ Effectively a conditional CALL, with the next cell address on the return stack.
+
+\ Higher-level control flow words, 'structured programming' words.
+: TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;		\ Allocate a cell to be filled with an address later, placing HERE on the data stack to allow finding the cell.
+: HEREALLOT	( addr -- )		[ HERE SWAP ! ] ;		\ Fill the last empty TEMPALLOTed cell with the current value of HERE.
+: ifd{		( -- addr )		~~ NOT ~~ JMPNZ ~ TEMPALLOT ;	\ In new code, jump on 0 to address to be determined later, otherwise continue after address.
+: if{		( -- addr )		~~ DUP ~ ifd{ ;			\ As 'ifd{', but without consuming the test value.
+: }if		( addr -- )		~ HEREALLOT ;			\ Fill in address used by jump placed by 'ifd{' or 'if{'.
+: }else{	( addr -- addr )	~ }if ~~ NOT ~ if{ ;		\ Should not normally be used with 'ifd{'.
+: }elsed{	( addr -- addr )	~ }if ~~ NOT ~ ifd{ ;		\ Should not normally be used with 'ifd{'.
+: infloop{	( -- addr )		~ HERE ;			\ Define loop address of infinite (i.e. unconditional) loop.
+: }infloop	( addr -- )		~ ~JMP, ;			\ Place end of infinite loop -- i.e. the jump word cell.
+: loop{		( -- addr )		~ HERE ;			\ Define loop address of conditional loop, which is the beginning of the test.
+: }loop{	( -- addr )		~ if{ ;				\ Define the end of the test part of the conditional loop.
+: }loopd{	( -- addr )		~ ifd{ ;			\ Like '}loop{', but the test value will be consumed.
+: }loop		( addr addr -- )	[ SWAP ~JMP, }if ] ;		\ End of conditional loop. 'SWAP' required to place jumps correctly (as 'if{' and 'ifd{' place 'HERE's).
+: do{		( -- addr )		~ HERE ;			\ Define loop address of do loop (test at the end of each iteration).
+: }dod		( addr -- )		~~ JMPNZ ~ , ; 			\ Place address after conditional jump word cell -- suffices for loop test. Could instead be '[ LIT, JMPNZ , ]'.
+: }do		( addr -- )		~~ DUP ~ }dod ;			\ Like '}dod', but the test value will not be consumed.
+
+
+\ Non-stack variables and constants (though one's constant is anothers' variable...):
+: value		( n - "name" - )	[ : [LITERAL] ; ] ;		\ Like a constant, but a word could be written to change all values stored like this.
+: var		( - "name" - )		[ HERE CELL ALLOT value ] ;	\ A 'value' storing an address for storing other values -- i.e. a variable or pointer.
+: >var		( n - "name" - )	[ HERE SWAP , value ] ;		\ An initialized variable.
+
+0 BNOT value CELL_MAX			\ 1111...			\ Maximum unsigned value of this language's standard (cell) type.
+CELL_MAX DUP 1 >> - value SIGNED_MIN	\ 1000...			\ Minimum signed value (maximum magnitude negative value) (assuming two's complement).
+CELL_MAX SIGNED_MIN - value SIGNED_MAX	\ 0111...			\ And maximum signed two's complement value.
+
+
+\ Words for memory and dictionary management:
+: TRIM		( addr -- )		[ DUP CPTR ! CEND @ PAGESIZE - <= ]			\ Free memory after addr, while also trimming the dictionary to maintain validity.
+					ifd{ [ HERE M_SET_END ] }if \ If a page or more is freed, then free whole pages to the operating system.
+					loop{ [ HEAD @ HERE >= ] }loopd{ \ Ensure that all extant dictionary entries exist within still-claimed memory.
+					[ HEAD @ @ HEAD ! ] }loop ; \ For all possible heads beyond HERE, set the new head to be the entry pointed to by the current head.
+: FORGET	( - "name" - )		[ 'XADDR TRIM ] ;					\ Free ('forget') all memory after and including a given word.
+: deletion_mark	( - "name" - )		~ HERE ~ : ~ [LITERAL] ~~ TRIM ~ ; ;			\ Prepare a word to free all memory after the current HERE, for later.
+: UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] ( nextxt xt head )			\ Given an execution token (xt), find its place in the dictionary and cut it out.
+					loop{ [ 2DUP @ <> ] }loopd{ \ Loop until about to reach the xt from HEAD.
+					~ @ }loop ( nextxt xt earlierxt ) \ Dereferencing from HEAD will lead to the xt.
+					[ NIP ! ] ; \ Have earlierxt point to nextxt, cutting xt out of the linked list (but not freeing the memory, so the code can still execute).
+: UNLINK	( - "name" - )		[ ' UNLINKXT ] ;					\ Remove given word from the dictionary, so it is no longer invokable or threadable.
+
+\ Words for dealing with character strings:
+: c,		( c -- )		[ HERE 1 ALLOT c! ] ;		\ Store a 1-byte value in the threaded-code area of memory.
+: ,"		( - "text" - )		loop{ [ CIN DUP ] [char] " ~ <>	\ Store a character array (a string) in the threaded-code area of memory.
+					}loopd{ ~ c, }loop ~ DROP ;
+: ,n"		( - "text" - )		[ ," 0 c, ] ;			\ Store a null-terminated string in memory.
+: ,nh"		( - "text" - addr )	[ HERE ,n" ] ;			\ Store a null-terminated string and place its start address on the data stack.
+: ,h"		( - "text" - addr len )	[ HERE ," DUP HERE SWAP - ] ;	\ Store a character array and place its start address and its length on the data stack.
+
+\ Words for printing strings to standard output:
+: ."		( - "text" - )		[ HERE ,nh" (n.) TRIM ] ;	\ '." blah" will print out 'blah' plus a newline.
+: aligned_,nh"	( - "text" - )		[ ,nh" DUP HERE SWAP - ]	\ Like ',nh"', but the code pointer ('CPTR') is aligned (with nulls) onto a cell. Helps with 'dump' and 'see'.
+					loop{ [ DUP CELL % ] }loopd{
+					[ 0 c, 1+ ] }loop ~ DROP ;
+: ~."		( - "text" - )		~~ JMP				\ The new code will print text between quotes, plus a newline. '~." blah"' --> new code prints 'blah' + newline.
+					[ TEMPALLOT aligned_,nh" SWAP ] ( text_addr jmp_addr ) \ When executed, will jump over the text (embedded in code, as one pass) and then print.
+					[ HEREALLOT [LITERAL] ] ~~ (n.) ;
+
+
+\ Interactive control flow words:
 ,nh" }" value delimiter
-: iifd{		( n -- )		~ NOT ifd{ [ delimiter c@ SKIPBL RET ] }if ( -- )
-					infloop{ [ BSW DUP delimiter CSTRCMP ]
+: iifd{		( n -- )		~ NOT ifd{ [ delimiter c@ SKIPBL RET ] }if ( -- )	\ Interactive if (analogous to the C preprocessor's #if), consuming the test value.
+					infloop{ [ BSW DUP delimiter CSTRCMP ] \ If 0, skip and do nothing until delimiter, otherwise loop, executing words, until delimiter.
 						~ NOT ifd{ [ DROP RET ] }if
 					~ EXEC }infloop ;
 UNLINK delimiter
-: ielsed{	( n -- )		[ NOT iifd{ ] ;
-: iif{		( n -- n )		[ DUP iifd{ ] ;
-: ielse{	( n -- NOTn )		[ NOT iif{ ] ;
-
-: TRIM		( addr -- )		[ DUP CPTR ! CEND @ PAGESIZE - <= ]
-					ifd{ [ HERE M_SET_END ] }if
-					loop{ [ HEAD @ HERE >= ] }loopd{
-					[ HEAD @ @ HEAD ! ] }loop ;
-: FORGET	( - "name" - )		[ 'XADDR TRIM ] ;
-: deletion_mark	( - "name" - )		~ HERE ~ : ~ [LITERAL] ~~ TRIM ~ ; ;
-
-: ."		( - "text" - )		[ HERE ,nh" n. TRIM ] ;
-: aligned_,nh"	( - "text" - )		[ ,nh" DUP HERE SWAP - ]
-					loop{ [ DUP CELL % ] }loopd{
-					[ 0 c, 1+ ] }loop ~ DROP ;
-: ~."		( - "text" - )		~~ JMP
-					[ TEMPALLOT aligned_,nh" SWAP ]
-					[ HEREALLOT [LITERAL] ] ~~ n. ;
-
-\ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ;
+: ielsed{	( n -- )		[ NOT iifd{ ] ;						\ Normally, should not be used with 'iifd{', but rather 'iif{'.
+: iif{		( n -- n )		[ DUP iifd{ ] ;						\ These do not consume test values...
+: ielse{	( n -- NOTn )		[ NOT iif{ ] ;						\ ...
 
 
+\ : LIT, ~." LIT," [ .s r@ .s @ ] ~." got addr" [ .s , .s ] ~." written, skipping" [ (SKIPCELL) .s ] ~." skipped" ; \ For debugging words using 'LIT,'.
+
+\ Deferred ('~~') threading code:
 ,nh" ]]" value DELIM
-: [[					[ BSW DUP DELIM CSTRCMP NOT ]
-					ifd{ [ DROP RET ] }if
-					[ DUP WORDSEARCH ]
-					if{ [ LIT, LIT, , ] }elsed{
-					[ LIT, LIT, LIT, LIT ]
-					[ LIT, LIT, # , ] }if GOTO [[ ;
+: [[					[ BSW DUP DELIM CSTRCMP NOT ]	\ This is to '~~' as '[' is to '~'. I.e., will thread code that threads code, with final code between '[['...
+					ifd{ [ DROP RET ] }if		\ ...and ']]'. ': bar [[ WORDS ]] ; : foo bar ; ' --> invoking 'foo' will then give the same output as 'WORDS'.
+					[ DUP WORDSEARCH ] \ If not delimiter, will try to find word in dictionary ('WORDSEARCH' returns 0 on failure).
+					if{ [ LIT, LIT, , ] }elsed{ \ If word found, place 'LIT, word' in new code -- newer code created by the new code then executes the word.
+					[ LIT, LIT, LIT, LIT ] \ If not a word, but a number, place 'LIT, LIT LIT, value', so when the new code is used: 'LIT value' giving value on...
+					[ LIT, LIT, # , ] }if GOTO [[ ; \ ...the data stack when executing newer code. Then GOes TO the start to test for DELIM, again.
 UNLINK DELIM
-\ : ]] ;	\ instead of ANSI FORTH's >DOES
+: DOES:		( addr -- )		[ : [LITERAL] ] ; \ value?	\ Given an address, will place 'LITERAL address' to give address on the data stack when newer code executed.
+: PRINT:	( addr -- )		~ DOES: [[ n. RET ]] ~ ; ;	\ Given an address, will produce a word that will print a null-terminated string starting at that address.
+: message"	( - "text" "name" - )	[ ,nh" PRINT: ] ;		\ Given text in quotes and a name, will produce a word by that name that prints the text.
+: makestar	( n - "name" - )	[ HERE SWAP ] do{ [char] * [ c, 1- ] }do [ DROP 0 , PRINT: ] ; \ Given a number, will produce a word producing that many stars in stdout.
+
+\ Warning: metaprogramming.
+\ Forth-like 'DOES>' word (part of the Forth standard, but with so many implementation options!). 'DOES>' is used to make a word that gives an address/value to a word that IT defines, which then places the address on the data stack and then jumps to the word defined using 'DOES>', just AFTER 'DOES>':
+: (DOES>)	( -- )		~~~ JMP [ LIT, LIT, TEMPALLOT ]	\ --> '~~ JMP LIT, LIT, TEMPALLOT ~ ; ~ RET HEREALLOT' --> '~ JMP LIT, addr_after_RET ; RET'...
+				[[ ; RET ]] ~ HEREALLOT ;	\ ... --> 'JMP addr_after_RET'
+: (DOES>)	( -- )		~~~ JMP ~~ LIT, ~ TEMPALLOT	\ --> '~~ JMP ~    LIT, TEMPALLOT ~ ; ~ RET HEREALLOT' --> '~ JMP LIT, addr_after_RET ; RET'...
+				~~ ; ~~ RET     ~ HEREALLOT ;	\ ... --> 'JMP addr_after_RET'
+: (DOES>)	( -- )		[ LIT, LIT, LIT, JMP ]		\ --> 'LIT, LIT, LIT, JMP LIT, LIT, TEMPALLOT LIT, ; LIT, RET HEREALLOT'...
+				[ LIT, LIT,       TEMPALLOT ]	\ ... --> 'LIT, JMP LIT, addr_after_RET ; RET'
+				[ LIT, ; LIT, RET HEREALLOT ] ;	\ ... --> 'JMP addr_after_RET'
+: LIT,,		( -- )		[ LIT, LIT, ] GOTO LIT, ;	\ --> 'LIT, some_value' --> 'some_value' (would not work to call 'LIT,' a third time, must jump to it).
+: LIT,,,	( -- )		[ LIT, LIT,, ] GOTO LIT, ;	\ --> 'LIT,, some_value' --> 'LIT, some_value' --> 'some_value'
+: LIT,,,,	( -- )		[ LIT, LIT,,, ] GOTO LIT, ;	\ --> 'LIT,,, some_value' --> 'LIT,, some_value' --> 'LIT, some_value' --> 'some_value'
+: LIT,,,	( -- )		[ LIT,, LIT, ] GOTO LIT,, ;	\ --> 'LIT, LIT, LIT, some_value' --> 'LIT, some_value' --> 'some_value'
+: LIT,,,,	( -- )		[ LIT,, LIT,, ] GOTO LIT,, ;	\ --> 'LIT, LIT,, LIT, some_value' --> 'LIT,, some_value' --> 'LIT, some_value' --> 'some_value'
+: (DOES>)	( -- )		[ LIT,, JMP ~LIT, TEMPALLOT ]	\ --> 'LIT,, JMP ~LIT, TEMPALLOT LIT, ; LIT, RET HEREALLOT' --> 'LIT, JMP LIT, addr_after_RET ; RET'...
+				[ LIT, ; LIT, RET HEREALLOT ] ;	\ ... --> 'JMP addr_after_RET'
+: DOES>		( addr -- )	~~ [LITERAL] ~ (DOES>) ;	\ --> '~ [LITERAL] (DOES>)' --> '[LITERAL] ~ JMP LIT, addr_after_RET ; RET'...
+								\ ... --> 'LITERAL addr JMP addr_after_RET'
 
 
-\ [ LIT, LIT, LIT, LIT LIT, LIT, # , ]
-\ [ LIT, LIT LIT, val ]
-\ [ LIT val ]
-
-: DOES:		( addr -- )		[ : [LITERAL] ] ; \ value?
-: PRINT:	( addr -- )		~ DOES: [[ n. RET ]] ~ ; ;
-
-: message"	( - "text" "name" - )	[ ,nh" PRINT: ] ;
-
-\ a do loop would be useful here TODO
-: makestar 	( n - "name" - )	[ HERE SWAP 1+ ]
-					loop{ ~ 1- }loop{
-					[char] * ~ c, }loop 
-					[ DROP 0 , PRINT: ] ;
-
-: LIT,,		[ LIT, LIT, ] GOTO LIT, ;
-: LIT,,,	[ LIT,, LIT, ] GOTO LIT,, ;
-: LIT,,,,	[ LIT,, LIT,, ] GOTO LIT,, ;
-
-: (DOES>)	( addr -- )		~~~ JMP [ LIT, LIT, TEMPALLOT ]
-					[[ ; RET ]] ~ HEREALLOT ;
-: (DOES>)	( addr -- )		~~~ JMP ~~ LIT, ~ TEMPALLOT
-					~~ ; ~~ RET     ~ HEREALLOT ;
-: (DOES>)	( addr -- )		[ LIT, LIT, LIT, JMP ]
-					[ LIT, LIT,       TEMPALLOT ]
-					[ LIT, ; LIT, RET HEREALLOT ] ;
-: (DOES>)	( addr -- )		[ LIT,, JMP ~LIT, TEMPALLOT ]
-					[ LIT, ; LIT, RET HEREALLOT ] ;
-: DOES>		( addr -- )		~~ [LITERAL] ~ (DOES>) ;
-
-: 'XNAME	( - "word" - addr )	[ ' XNAME ] ;
-
-
-: emit_xxd	( n -- )		[ DUP 0x20 <= ]	ifd{ ~ DROP [emit] . ~ RET }if
-					[ DUP 0x7f >= ]	ifd{ ~ DROP [emit] . ~ RET }if
-					~ emit ;
-: 2DROP		( n n -- )		[ DROP DROP ] ;
-: emit_range	( a a -- )		~ SWAP do{
-						[ DUP c@ emit_xxd ]
-						[ 1+ 2DUP <> ]
+\ What follows is for defining a 'dump' word, which displays a hex-dump of a region of memory, as well as its ASCII representation and any possible dictionary entries (words):
+: emit_xxd	( n -- )		[ DUP 0x20 <= ]	ifd{ ~ DROP [emit] . ~ RET }if	\ A dot for whitespace and a bunch of control characters.
+					[ DUP 0x7f >= ]	ifd{ ~ DROP [emit] . ~ RET }if	\ A dot for DEL and non-ASCII characters.
+					~ emit ;						\ Displays ASCII symbol of n's value, or a dot if whitespace, control or non-ASCII.
+: emit_range	( a1 a2 -- )		~ SWAP do{						\ Displays the range of bytes given as ASCII characters and dots.
+						[ DUP c@ emit_xxd ] \ Display byte at a1
+						[ 1+ 2DUP <> ] \ Advance a1 by 1 until a2
 					}dod ~ 2DROP ;
-: >range	( a n -- a a )		[ OVER + ] ;
-: BL		( -- )			[ 0x20 emit ] ;
-: hex_nybble	( n -- )		[ 0xf BAND (x.) ] ;
-: hex_byte	( n -- )		[ DUP 0x4 >> hex_nybble hex_nybble ] ;
-: hex_range	( a a -- )		~ SWAP do{
-						[ DUP c@ hex_byte ]
-						[ 1+ 2DUP <> ]
+: hex_nybble	( n -- )		[ 0xf BAND (x.) ] ;					\ Displays hexadecimal value of least significant nybble (4 bits) of top of data stack.
+: hex_byte	( n -- )		[ DUP 0x4 >> hex_nybble hex_nybble ] ;			\ Displays two least significant nybbles in hexadecimal.
+: hex_range	( a1 a2 -- )		~ SWAP do{						\ Displays the range of bytes given as hexadecimal couples.
+						[ DUP c@ hex_byte ] \ Display byte at a1
+						[ 1+ 2DUP <> ] \ Advance a1 by 1 until a2
 					}dod ~ 2DROP ;
-: dump_cell	( addr -- )		[ DUP (0x.) ] [emit] :
+: >range	( a1 n -- a1 a2 )	[ OVER + ] ;						\ Converts and address plus length to an address range (lower and higher address).
+: dump_cell	( addr -- )		[ DUP (0x.) ] [emit] :		\ address		\ Given a cell address, shows: address:  cell_hex_values  |cell_ASCII_values|  word?
 					[ BL BL ]
-					[ DUP CELL >range hex_range ]
+					[ DUP CELL >range hex_range ]	\ cell_hex_values
 					[ BL BL ] [emit] |
-					[ DUP CELL >range emit_range ]
+					[ DUP CELL >range emit_range ]	\ cell_ASCII_values
 					[emit] | [ BL BL ]
-					[ @ NAME_OUT NL ] ;
+					[ @ NAME_OUT NL ] ;		\ word? if not, decimal number
 UNLINK emit_range \ there may be another, useful, emit_range smothered
-: align		( n n -- n )		[ 1- BNOT BAND ] ;
-: align_up	( n n -- n )		[ @r 1- + r> align ] ;
-: dump_range	( a a -- )		\ [ CELL align_up SWAP ] do{
-					~ SWAP do{
+: align		( n1 n2 -- n3 )		[ 1- BNOT BAND ] ;					\ Aligns n1 to n2, aligning down. n2 must be a power of 2.
+: align_up	( n1 n2 -- n3 )		[ @r 1- + r> align ] ;					\ Aligns n1 to n2, aligning up. n2 must be a power of 2.
+: dump_range	( a1 a2 -- )		\ [ CELL align_up SWAP ] do{	\ align to show whole last cell
+					~ SWAP do{						\ Given address range, shows: address:  cell_hex_values  |cell_ASCII_values|  word?
 						[ DUP dump_cell ]
 						[ CELL+ 2DUP > ]
 					}dod ~ 2DROP ;
-: dump		( a n -- )		[ >range dump_range ] ;
+: dump		( a n -- )		[ >range dump_range ] ;					\ Given address + length, shows: address:  cell_hex_values  |cell_ASCII_values|  word?
 
 \ how to find out width of terminal (number of columns) for nice output?
 
-: IDEBUG	( -- )			[ GLOBAL_INPUT @ STDIN GLOBAL_INPUT ! ] ( addr )
-					~." Entered INTERACTIVE DEBUGGING MODE!"
-					~." Press CTRL-D (EOF) to continue execution."
+: IDEBUG	( -- )			[ GLOBAL_INPUT @ STDIN GLOBAL_INPUT ! ] ( file_descriptor )	\ Interactive debugger for use outside other words. Printed text explains more.
+					[ NL NL ]
+					~." Entered INTERACTIVE DEBUGGING MODE!" ~ NL
+					~." Press CTRL-D (EOF) to continue execution." ~ NL
+					~." On the data stack is the value of GLOBAL_INPUT before it was replaced with STDIN." ~ NL
+					~." It can be replaced with another file descriptor, but should otherwise not be changed." ~ NL
+					~." On resumption of execution, IDEBUG expects a file descriptor on the top of the stack." ~ NL
+					[ NL NL ]
 					[ OUTER_INTERPRETER GLOBAL_INPUT ! ] ;

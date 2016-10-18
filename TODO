@@ -1,15 +1,15 @@
 does C have a "typeof" operator, like "sizeof"?
 
-Write shell scrip that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script.
+Write shell script that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script and/or the test.hfs test script.
 
-fix deletion_mark on x86_64 -- difficult to reproduce error.
+fix deletion_mark -- difficult to reproduce error (or is it gone?).
 align dictionary entries on size_t/CELL to make dumps more useful (NEXT would be made very clear)? would need to align after placing name as well (in semicolon).
+add TRACE example to hello.hfs.
 ifnd{ and ifn{ ( equivalent to ~ NOT ifd{ etc.) comes up a lot, so would be helpful if they existed (plus a little more efficient as JMPNZ rather than NOT NOT JMPNZ).
 }ifr, to stand for '~ RET }if'
 SKIPBL? Would require some rearrangement of core.hfs (c, earlier etc.) and slight changes to ( and iifd{.
 Add "TO" word that modifies existing dictionary entries to point to new code.
 mechanism for creating references (place on return stack with >r then use PROCPTR) --> INNER callable within language, directly.
-add TRACE example to hello.hfs.
 "henceforth" stack-reordering word.
 did iif{ based on [, how about EXEC based on [?
 

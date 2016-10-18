@@ -1,39 +1,40 @@
-." >>>>>>>>>>>>>>>>>>>>>>>>Hello, world!<<<<<<<<<<<<<<<<<<<"
+." >>>>>>>>>>>>>>>>>>>>>>>>Hello, world!<<<<<<<<<<<<<<<<<<<" NL NL
 
-." Note that HERE is:" HERE .
+." Note that HERE is: " HERE 0x. NL NL
 
 deletion_mark hello_mark
-
 ,nh" This text is stored semi-permanently, subject to a deletion_mark" n.
-." The deletion_mark is called hello_mark."
+." The deletion_mark is called hello_mark." NL NL
 
-." There is a procedure called test_proc."
+." There is a procedure called test_proc." NL
 ,nh" This text is used in test_proc." : test_proc [LITERAL] ~ n. ;
-." Calling test_proc..." test_proc
-." Here is the list of all procedures (words) via WORDS:" WORDS
-IDEBUG
-." HERE is currently:" HERE .
+." Calling test_proc..." NL test_proc NL
 
-IDEBUG
+." Here is the list of all procedures (words) via WORDS:" NL WORDS NL
+\ IDEBUG
 
-." Now using deletion_mark hello_mark." hello_mark
-." Now HERE is:" HERE .
-." And there are fewer WORDS:" WORDS
+." HERE is currently: " HERE 0x. NL
+
+\ IDEBUG
+
+." Now using deletion_mark hello_mark." NL hello_mark
+." Now HERE is: " HERE 0x.
+." And there are fewer WORDS:" NL WORDS NL NL
 
 message"
  *** 
  * * 
  *** " box
-." here is a box:" box
+." here is a box:" NL box NL
 
 message"
   *  
  *** 
 *****" triangle
-." here is a triangle:" triangle
+." here is a triangle:" NL triangle NL
 
 : house [ triangle box ] ;
-." here is a house:" house
+." here is a house:" NL house NL
 
 deletion_mark fizzbuzz_marker
 
@@ -49,54 +50,31 @@ deletion_mark fizzbuzz_marker
 					[ DUP 5 % NOT ] ifd{
 						~." Buzz" [ RDROP 0 >r ]
 					}if
-					~ r> ifd{ [ DUP . ] }if
+					~ r> ifd{ [ DUP (.) ] }if ~ NL
 				}loop [ DROP DROP ] ;
 
-."
+." commencing fizzbuzz to 15:" NL 15 fizzbuzz NL
 
-commencing fizzbuzz to 15:" 15 fizzbuzz
-see fizzbuzz_marker
+." Behold the deletion_mark for fizzbuzz (fizzbuzz_marker):" NL
+see fizzbuzz_marker NL
 fizzbuzz_marker
+
 : fizz		( n -- bool )		[ 3 % NOT ] if{	~." Fizz" }if ;
 : buzz		( n -- bool )		[ 5 % NOT ] if{	~." Buzz" }if ;
 : fizzbuzz	( n -- )	[ 0 ] loop{ [ 1+ 2DUP >= ] ( n c p )
 				}loopd{ [ 0 ] ( n c p )
 					[ >r DUP fizz r> BOR ]
 					[ >r DUP buzz r> BOR ]
-					[ NOT ] ifd{ [ DUP . ] }if
+					[ NOT ] ifd{ [ DUP (.) ] }if ~ NL
 				}loop [ DROP DROP ] ;
 
-."
+." commencing a different fizzbuzz to 15:" NL 15 fizzbuzz NL
 
-commencing fizzbuzz to 15:" 15 fizzbuzz
 : fizzbuzz	( n -- )	[ 0 ] loop{ [ 1+ 2DUP >= ] ( n c p )
 				}loopd{ [ 0 ] ( n c p )
 					[ OVER fizz BOR ]
 					[ OVER buzz BOR ]
-					[ NOT ] ifd{ [ DUP . ] }if
+					[ NOT ] ifd{ [ DUP (.) ] }if ~ NL
 				}loop [ DROP DROP ] ;
 
-."
-
-
-commencing fizzbuzz to 15:" 15 fizzbuzz
-\ HERE value fizz 3 ,  ,n" Fizz"
-\ HERE value buzz 5 ,  ,n" Buzz"
-\ HERE value gizz 7 ,  ,n" Gizz"
-\ HERE value cuzz 11 , ,n" Cuzz"	\ any more complex, would want a map
-\ : test	( n a -- bool )	[ TUCK @ % NOT ] if{ [ SWAP CELL+ n. ] }if ;
-\ : fizzbuzz	( n -- )	[ 0 ] loop{ [ 1+ 2DUP >= ] ( n c p )
-\ 				}loopd{ [ 0 ] ( n c p )
-\ 					[ OVER fizz test BOR ]
-\ 					[ OVER buzz test BOR ]
-\ 					[ OVER gizz test BOR ]
-\ 					[ OVER cuzz test BOR ]
-\ 					[ NOT ] ifd{ [ DUP . ] }if
-\ 				}loop [ DROP DROP ] ;
-\ 
-\ ."
-\ 
-\ commencing fizzbuzz to 15:" 15 fizzbuzz
-
-\ 3 value Fizz
-\ 5 value Buzz
+." commencing another different fizzbuzz to 15:" NL 15 fizzbuzz NL
