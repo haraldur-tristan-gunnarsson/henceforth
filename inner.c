@@ -632,7 +632,6 @@ NATIVE_CODE(colon){//( - "name" - ) Create a temporary entry. Made permanent by 
 		else if(word_index){
 			word[word_index] = '\0';
 			strcpy(temp_entry_name_ptr, word);//Send name to temporary store.
-			align_code_native();//Make dumps readable.
 			temp_entry_ptr->name = temp_entry_name_ptr;
 			temp_entry_ptr->code.threaded = code_ptr;//ALL from now to ;.
 			temp_entry_ptr->can_delete = -1;//Yes.
@@ -655,17 +654,21 @@ NATIVE_CODE(semicolon){//Make all currently temporary dictionary entries permane
 	struct entry *internal_ptr = (struct entry*)temp_entry_store;
 	for(; internal_ptr < temp_entry_ptr; ++internal_ptr){//For all temp entries (1?)
 		char *name_ptr = (char*)code_ptr;//Place name before struct entry.
+
 		push_data((size_t)strlen(internal_ptr->name) + 1);//strlen excludes 0term
 		allot_native();//Changes code_ptr --> after_code.
 		strcpy(name_ptr,internal_ptr->name);
+		align_code_native();//Make dumps readable.
+
 		internal_ptr->name = name_ptr;
 		internal_ptr->code_size = after_code - internal_ptr->code.threaded;
-
 		if(internal_ptr > temp_entry_store)internal_ptr->next = head;//Not first.
 		head = (struct entry*)code_ptr;//Just after name.
+
 		push_data(sizeof(struct entry));
 		allot_native();//Changes code_ptr --> after_code.
 		memcpy(head, internal_ptr, sizeof(struct entry));
+		//align_code_native();//Not necessary at time of coding, assuming that an 'int' is either equal to or half the size of a pointer and/or structs are padded automatically to align to the largest primitive member type (i.e. 'size_t') -- otherwise, or if the 'entry' struct is changed, this may be necessary for pleasant and useful memory dumps.
 	}
 	temp_entry_ptr = (struct entry*)temp_entry_store;//Clear temporary entries...
 	temp_entry_name_ptr = (char*)temp_entry_name_store;//...

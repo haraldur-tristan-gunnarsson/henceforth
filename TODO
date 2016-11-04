@@ -1,4 +1,4 @@
-does C have a "typeof" operator, like "sizeof"?
+does C have a "typeof" operator, like "sizeof"? -- EDIT: It exists as a GNU extension.
 
 Write shell script that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script and/or the test.hfs test script.
 
