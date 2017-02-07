@@ -88,12 +88,13 @@
 : ~JMPL,	( addr -- )		~~ JMPL ~ , ;			\ Take address from data stack and place it after the address of the 'JMPL' word.
 : 'XADDR	( - "name" - addr )	[ ' XADDR ] ;			\ Gives the address of the start of threaded code for the following word -- the eXecution ADDRess.
 : GOTO		( - "name" - )		[ 'XADDR ~JMP, ] ;		\ From new code, will directly jump to start of threaded code of the word given.
-: GOSUB		( addr -- )		[ 'XADDR ~JMPL, ] ;		\ From new code, will jump to start of threaded code of the word given, with next cell address on return stack.
+: GOSUB		( - "name" - )		[ 'XADDR ~JMPL, ] ;		\ From new code, will jump to start of threaded code of the word given, with next cell address on return stack.
 : (JMPNZ)	( n r> -- addr skip? )	[ >r NOT DUP NOT r> @ BAND SWAP ] ; \ '0 NOT'== 0 BNOT'	\ Decide whether to jump or to skip the next cell, and get address to jump to.
 : JMPNZ		( n -- )		[ r@ (JMPNZ) r> CELL+ BAND + >r RET ] ;			\ Jump on non-zero, otherwise skip the next cell.
 : JMPNZL	( n -- )		[ r@ (JMPNZ) r> CELL+ @r BAND + >r RET ] ;		\ Effectively a conditional CALL, with the next cell address on the return stack.
 
 \ Higher-level control flow words, 'structured programming' words.
+: RECURSE	( -- )			[ HEAD @ XADDR ~JMPL, ] ;	\ Not "[ HEAD @ , ]": ";" changes new dict. entry addrs., due to the temp. entry system, allowing unstructured code.
 : TEMPALLOT	( -- addr )		[ HERE CELL ALLOT ] ;		\ Allocate a cell to be filled with an address later, placing HERE on the data stack to allow finding the cell.
 : HEREALLOT	( addr -- )		[ HERE SWAP ! ] ;		\ Fill the last empty TEMPALLOTed cell with the current value of HERE.
 : ifd{		( -- addr )		~~ NOT ~~ JMPNZ ~ TEMPALLOT ;	\ In new code, jump on 0 to address to be determined later, otherwise continue after address.

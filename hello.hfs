@@ -78,3 +78,11 @@ fizzbuzz_marker
 				}loop [ DROP DROP ] ;
 
 ." commencing another different fizzbuzz to 15:" NL 15 fizzbuzz NL
+
+
+\ mindless recursion example:
+: fact		( n -- n )	[ DUP 1 <= ] ifd{ [ DROP 1 RET ] }if
+				[ DUP 1- ] RECURSE ~ * ;
+				
+." factorial of 5 is: " 5 fact .
+." factorial of 9 is: " 9 fact .

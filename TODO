@@ -1,6 +1,6 @@
 does C have a "typeof" operator, like "sizeof"? -- EDIT: It exists as a GNU extension.
 
-Write shell script that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script and/or the test.hfs test script.
+Write shell script that applies rlwrap to inner.elf, if it is available.
 
 add TRACE example to hello.hfs.
 ifnd{ and ifn{ ( equivalent to ~ NOT ifd{ etc.) comes up a lot, so would be helpful if they existed (plus a little more efficient as JMPNZ rather than NOT NOT JMPNZ).
@@ -14,6 +14,3 @@ did iif{ based on [, how about EXEC based on [?
 review CALL and INNER_INTERPRETER to see if there is a better way
 
 place macro definition into string, how?
-
-if the temp_entry dictionary was removed (so also hampering unstructured coding), then recursion would be much easier to do. This would work:
-: RECURSE       ( --)                  [ HEAD @ , ] ;

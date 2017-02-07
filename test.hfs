@@ -77,6 +77,9 @@ CELL CELL+ CELL+ CELL - 2 CELLS <>				iifd{ ." ERROR: CELL words malfunctioning.
 1 NOT								iifd{ ." ERROR: 'NOT' failed." }
 -1 BNOT								iifd{ ." ERROR: 'BNOT' failed." }
 0 NOT 0 BNOT <>							iifd{ ." ERROR: the standard TRUTH value must be the same as '0 BNOT'. }
+: fact		( n -- n )	[ DUP 1 <= ] ifd{ [ DROP 1 RET ] }if
+				[ DUP 1- ] RECURSE ~ * ;
+5 fact 120 <> iifd{ ." Factorial calculation using RECURSE failed." }
 mark
 
 \ Test 'DOES>' feature (analogous to ANSI FORTH 'DOES>'):
