@@ -2,8 +2,6 @@ does C have a "typeof" operator, like "sizeof"? -- EDIT: It exists as a GNU exte
 
 Write shell script that applies rlwrap to inner.elf, if it is available, and which optionally runs the hello.hfs test script and/or the test.hfs test script.
 
-fix deletion_mark -- difficult to reproduce error (or is it gone?).
-align dictionary entries on size_t/CELL to make dumps more useful (NEXT would be made very clear)? would need to align after placing name as well (in semicolon).
 add TRACE example to hello.hfs.
 ifnd{ and ifn{ ( equivalent to ~ NOT ifd{ etc.) comes up a lot, so would be helpful if they existed (plus a little more efficient as JMPNZ rather than NOT NOT JMPNZ).
 }ifr, to stand for '~ RET }if'

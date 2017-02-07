@@ -123,10 +123,11 @@ CELL_MAX SIGNED_MIN - value SIGNED_MAX	\ 0111...			\ And maximum signed two's co
 
 
 \ Words for memory and dictionary management:
-: TRIM		( addr -- )		[ DUP CPTR ! CEND @ PAGESIZE - <= ]			\ Free memory after addr, while also trimming the dictionary to maintain validity.
-					ifd{ [ HERE M_SET_END ] }if \ If a page or more is freed, then free whole pages to the operating system.
+: TRIM		( addr -- )		[ CPTR ! ] 						\ Free memory after addr, while also trimming the dictionary to maintain validity.
 					loop{ [ HEAD @ HERE >= ] }loopd{ \ Ensure that all extant dictionary entries exist within still-claimed memory.
-					[ HEAD @ @ HEAD ! ] }loop ; \ For all possible heads beyond HERE, set the new head to be the entry pointed to by the current head.
+					[ HEAD @ @ HEAD ! ] }loop \ For all possible heads beyond HERE, set the new head to be the entry pointed to by the current head.
+					[ CEND @ PAGESIZE - HERE >= ] \ Dictionary cleanup must come first, otherwise may call new pages with wrong values!
+					ifd{ [ HERE M_SET_END ] }if ; \ If a page or more is freed, then free whole pages to the operating system.
 : FORGET	( - "name" - )		[ 'XADDR TRIM ] ;					\ Free ('forget') all memory after and including a given word.
 : deletion_mark	( - "name" - )		~ HERE ~ : ~ [LITERAL] ~~ TRIM ~ ; ;			\ Prepare a word to free all memory after the current HERE, for later.
 : UNLINKXT	( xt -- )		[ DUP @ SWAP HEAD ] ( nextxt xt head )			\ Given an execution token (xt), find its place in the dictionary and cut it out.
