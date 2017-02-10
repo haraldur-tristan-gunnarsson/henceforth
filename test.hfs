@@ -4,9 +4,9 @@
 \ This source file is meant to test the core words of this forth-like language to highlight some possible regressions or platform incompatibilities/porting problems.
 \ Ideally, all the words tested here should be considered part of the core language. At least, all words that return a value should be tested here, as well as some words that can be used to define words that return values.
 
-\ TODO: 'DOES:', '[[', 'aligned_,nh"' (treat characters as numbers), ',h"', ',nh"', ',n"', ',"', 'c,', '>var', 'var', 'value', various control flow words, 'ALIGN_CODE', '@', '!', 'c@', 'c!', 'RDUP', 'RDROP', return stack manipulations, '#', 'ALLOT', ',', 'CSTRCMP',
+\ TODO: 'DOES:', '[[', 'aligned_,nh"' (treat characters as numbers), ',h"', ',nh"', ',n"', ',"', 'c,', '>var', 'var', various control flow words, 'ALIGN_CODE', 'RDUP', 'RDROP', return stack manipulations, '#',
 \ Perhaps some words are so fundamental that they cannot be fruitfully tested, as everything else would fail? Like 'LITERAL'/'LIT' (???), 'RET', ':', '[', ';',
-\ Adding all the BINARY_OPs and BOOLEANOPs from inner.c would be really tedious...
+\ Adding all the BINARY_OPs and BOOLEAN_OPs from inner.c would be really tedious...
 
 \ Testing immediate control flow:
 0				iifd{	." ERROR: 'iifd' executed on null." }
@@ -16,16 +16,25 @@
 0 iif{ ." ERROR: 'iif' executed on null." } DUP ielsed{ DROP 1 1 } NOT iifd{ ." ERROR: If the following is 1, 'ielsed' executed on 1, else 'ielsed' failed to execute on null:" DUP NOT . } DROP
 0 iif{ ." ERROR: 'iif' executed on null." } ielse{ DROP 1 } NOT iif{ ." ERROR: If the following is 0, 'iif' executed on 0, else 'ielse' failed to execute on null:" DUP NOT . } DROP
 
-\ Testing 'UNLINK', 'value', 'TRIM', deletion_mark and dictionary order:
+\ Test 'UNLINK', 'TRIM', deletion_mark, dictionary order and data words:
 HERE deletion_mark test_marker
 HERE value trimmer
-1 value unlink_test
-unlink_test 1-				iifd{ ." ERROR: 'value' failed to store 1." }
+
+HERE 2 CELLS ALLOT HERE - 2 CELLS + 	iifd{ ." ERROR: failed to 'ALLOT' 2 CELLS." }
+HERE 282 HERE CELL ALLOT ! @ 282 <>	iifd{ ." ERROR: either '!' or '@' failed." }
+HERE 2 HERE CELL ALLOT c! c@ 2 <>	iifd{ ." ERROR: either 'c!' or 'c@' failed." }
+HERE HERE , @ HERE CELL- <>		iifd{ ." ERROR: ',' failed." }
+HERE HERE 3 c, c@ 3 - HERE + 1- <>	iifd{ ." ERROR: 'c,' failed." }
+
+1 value unlink_test unlink_test 1-	iifd{ ." ERROR: 'value' failed to store 1." }
 0 value unlink_test
 : unlink_test2 [ unlink_test ] ;
 unlink_test				iifd{ ." ERROR: failed to shadow 'value' 1 with 'value' 0." }
 ' unlink_test UNLINKXT unlink_test 1-	iifd{ ." ERROR: 'UNLINKXT' failed to unshadow initial 'value' of 1." }
 UNLINK unlink_test unlink_test2		iifd{ ." ERROR: use of 'UNLINK' clobbered threaded code." }
+var test_v 4 test_v ! test_v @ 4 -	iifd{ ." ERROR: 'var' failed to store and return 4." }
+7 >var test_var test_var @ 7 -		iifd{ ." ERROR: '>var' failed to store and return 7." }
+
 PAGESIZE 11 * ALLOT		\ Test for regression of TRIM bug...
 : blah [ 1 1 + ] ;		\ ...that occurred when freeing up...
 : blah2 [ WORDS HERE ] ;	\ ...pages to the OS and then...
@@ -41,8 +50,10 @@ test_marker HERE -			iifd{ ." ERROR: 'deletion_mark' not working properly." }
 deletion_mark test_marker
 : test [ NOT ] ;
 1 test												iifd{ ." ERROR: new word duplicating 'NOT' not working properly." }
-,nh" test" 'XNAME test CSTRCMP									iifd{ ." ERROR: ''XNAME' not working properly." }
-,nh" test" ' test XNAME CSTRCMP									iifd{ ." ERROR: 'XNAME' not working properly." }
+,nh" test" ,nh" tsss"	CSTRCMP	NOT								iifd{ ." ERROR: CSTRCMP treats non-equal strings as equal." }
+,nh" test" ,nh" test"	CSTRCMP									iifd{ ." ERROR: CSTRCMP treats equal strings as non-equal." }
+,nh" test" ' test XNAME	CSTRCMP									iifd{ ." ERROR: 'XNAME' not working properly." }
+,nh" test" 'XNAME test	CSTRCMP									iifd{ ." ERROR: ''XNAME' not working properly." }
 1 'XNAME test EXEC										iifd{ ." ERROR: 'EXEC' not executing new word." }
 1 ' test CALL											iifd{ ." ERROR: use of ''' then 'CALL' not working properly." }
 : ~test ~ + ;	5 4 ~test 9 <>									iifd{ ." ERROR: '~' not working properly." }
