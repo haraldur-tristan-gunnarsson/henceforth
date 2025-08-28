@@ -71,17 +71,17 @@ size_t *code_end = NULL;//Pointer to current end of memory available to code_ptr
 size_t code_spc_max = 0;//Maximum size of region pointed (in)to by code_spc and code_ptr
 size_t page_size = 0;
 #define TEMP_ENTRY_MAX (0x20)
-const struct entry temp_entry_store[TEMP_ENTRY_MAX];//Separate, limited dictionary used by colon (:) and semicolon (;) in order to (perhaps foolishly) provide internal labels and unstructured code facility within 'words'. Unfortunately, if makes recursion very awkward.
-struct entry *temp_entry_ptr = (struct entry*)temp_entry_store;
+struct entry temp_entry_store[TEMP_ENTRY_MAX];//Separate, limited dictionary used by colon (:) and semicolon (;) in order to (perhaps foolishly) provide internal labels and unstructured code facility within 'words'. Unfortunately, it makes recursion very awkward.
+struct entry *temp_entry_ptr = temp_entry_store;
 struct entry *temp_entry_head = NULL;
 #define TEMP_ENTRY_NAME_LENGTH_MAX 0x100
-const char temp_entry_name_store[TEMP_ENTRY_MAX * TEMP_ENTRY_NAME_LENGTH_MAX];
-char *temp_entry_name_ptr = (char*)temp_entry_name_store;
+char temp_entry_name_store[TEMP_ENTRY_MAX * TEMP_ENTRY_NAME_LENGTH_MAX];
+char *temp_entry_name_ptr = temp_entry_name_store;
 #define STACK_SIZE (0x10000)
-const size_t data_stack[STACK_SIZE];
-size_t *data_ptr = (size_t*)data_stack;
-const size_t proc_stack[STACK_SIZE];
-size_t *proc_ptr = (size_t*)proc_stack;
+size_t data_stack[STACK_SIZE];
+size_t *data_ptr = data_stack;
+size_t proc_stack[STACK_SIZE];
+size_t *proc_ptr = proc_stack;
 size_t *inst_ptr = NULL;//Instruction pointer. Be very careful with code that touches it.
 size_t *c_stack_start = NULL;//To enable TRACE, need the memory range for the C stack.
 
